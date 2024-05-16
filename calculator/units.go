@@ -1,7 +1,6 @@
 package calculator
 
 import (
-	"blaze/store"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/francescobbo/blaze/store"
 )
 
 var weightUnits = map[string]float64{

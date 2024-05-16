@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"blaze/calculator"
-
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"golang.design/x/clipboard"
+
+	"github.com/francescobbo/blaze/calculator"
 )
 
 func main() {

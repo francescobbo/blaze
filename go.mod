@@ -1,4 +1,4 @@
-module blaze
+module github.com/francescobbo/blaze
 
 go 1.22.3
 
