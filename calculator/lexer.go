@@ -99,7 +99,7 @@ func (l *Lexer) Next() Token {
 }
 
 func (l *Lexer) HasNext() bool {
-	return l.Peek().kind != TokenEnd
+	return l.PeekNonWs().kind != TokenEnd
 }
 
 func (l *Lexer) NextNonWs() Token {

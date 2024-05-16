@@ -2,11 +2,8 @@ package calculator
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"slices"
-	"strconv"
-	"unicode"
 )
 
 // Value represents a number with an optional unit.
@@ -25,41 +22,23 @@ var currencySymbols = map[string]string{
 
 // Function to evaluate an expression
 func Evaluate(expression string) (Value, error) {
-	tokens := tokenize(expression)
-	return parseExpression(&tokens)
-}
-
-// Function to tokenize the expression
-func tokenize(expression string) []string {
 	lexer := NewLexer(&expression)
-	tokens := lexer.TokenizeAll()
-
-	// Convert tokens to strings
-	var tokenStrings []string
-	for _, token := range tokens {
-		if token.kind != TokenWhitespace {
-			tokenStrings = append(tokenStrings, token.value)
-		}
-	}
-
-	log.Println(tokenStrings)
-
-	return tokenStrings
+	return parseExpression(lexer)
 }
 
 // Function to parse and evaluate an expression
-func parseExpression(tokens *[]string) (Value, error) {
-	result, err := parseTerm(tokens)
+func parseExpression(lexer *Lexer) (Value, error) {
+	result, err := parseTerm(lexer)
 	if err != nil {
 		return Value{}, err
 	}
 
-	for len(*tokens) > 0 {
-		token := (*tokens)[0]
+	for {
+		token := lexer.PeekNonWs()
 
-		if token == "+" || token == "-" {
-			*tokens = (*tokens)[1:]
-			nextTerm, err := parseTerm(tokens)
+		if token.kind == TokenOperator && (token.value == "+" || token.value == "-") {
+			lexer.NextNonWs()
+			nextTerm, err := parseTerm(lexer)
 			if err != nil {
 				return Value{}, err
 			}
@@ -72,7 +51,7 @@ func parseExpression(tokens *[]string) (Value, error) {
 					return Value{}, err
 				}
 			}
-			if token == "+" {
+			if token.value == "+" {
 				result.Number += nextTerm.Number
 			} else {
 				result.Number -= nextTerm.Number
@@ -86,18 +65,18 @@ func parseExpression(tokens *[]string) (Value, error) {
 }
 
 // Function to parse and evaluate a term
-func parseTerm(tokens *[]string) (Value, error) {
-	result, err := parseFactor(tokens)
+func parseTerm(lexer *Lexer) (Value, error) {
+	result, err := parseFactor(lexer)
 	if err != nil {
 		return Value{}, err
 	}
 
-	for len(*tokens) > 0 {
-		token := (*tokens)[0]
+	for {
+		token := lexer.PeekNonWs()
 
-		if token == "*" || token == "/" || token == "of" {
-			*tokens = (*tokens)[1:]
-			nextFactor, err := parseFactor(tokens)
+		if token.value == "*" || token.value == "/" || token.value == "of" {
+			lexer.NextNonWs()
+			nextFactor, err := parseFactor(lexer)
 			if err != nil {
 				return Value{}, err
 			}
@@ -110,23 +89,23 @@ func parseTerm(tokens *[]string) (Value, error) {
 					return Value{}, err
 				}
 			}
-			if token == "*" {
+			if token.value == "*" {
 				result.Number *= nextFactor.Number
-			} else if token == "/" {
+			} else if token.value == "/" {
 				result.Number /= nextFactor.Number
 			}
-		} else if token == "mod" {
-			*tokens = (*tokens)[1:]
-			nextFactor, err := parseFactor(tokens)
+		} else if token.value == "mod" {
+			lexer.NextNonWs()
+			nextFactor, err := parseFactor(lexer)
 			if err != nil {
 				return Value{}, err
 			}
 			result.Number = math.Mod(result.Number, nextFactor.Number)
-		} else if token == "%" {
-			*tokens = (*tokens)[1:]
-			if len(*tokens) > 0 && ((*tokens)[0] == "of" || (*tokens)[0] == "*") {
-				*tokens = (*tokens)[1:]
-				nextFactor, err := parseFactor(tokens)
+		} else if token.value == "%" {
+			lexer.NextNonWs()
+			if lexer.PeekNonWs().value == "of" || lexer.PeekNonWs().value == "*" {
+				lexer.NextNonWs()
+				nextFactor, err := parseFactor(lexer)
 				if err != nil {
 					return Value{}, err
 				}
@@ -134,15 +113,15 @@ func parseTerm(tokens *[]string) (Value, error) {
 				result.Unit = nextFactor.Unit
 			} else {
 				// If this is an end of expression, then we need to divide by 100
-				if len(*tokens) == 0 {
+				if lexer.PeekNonWs().kind == TokenEnd {
 					result.Number /= 100
 				} else {
 					// otherwise if this is followed by an operator, this is still a percentage and needs to be divided by 100
-					if (*tokens)[0] == "+" || (*tokens)[0] == "-" || (*tokens)[0] == "*" || (*tokens)[0] == "/" || (*tokens)[0] == "mod" {
+					if lexer.PeekNonWs().value == "+" || lexer.PeekNonWs().value == "-" || lexer.PeekNonWs().value == "*" || lexer.PeekNonWs().value == "/" || lexer.PeekNonWs().value == "mod" {
 						result.Number /= 100
 					} else {
 						// this is a modulo operation
-						nextFactor, err := parseFactor(tokens)
+						nextFactor, err := parseFactor(lexer)
 						if err != nil {
 							return Value{}, err
 						}
@@ -159,28 +138,28 @@ func parseTerm(tokens *[]string) (Value, error) {
 }
 
 // Function to parse and evaluate a factor
-func parseFactor(tokens *[]string) (Value, error) {
-	result, err := parsePrimary(tokens)
+func parseFactor(lexer *Lexer) (Value, error) {
+	result, err := parsePrimary(lexer)
 	if err != nil {
 		return Value{}, err
 	}
 
-	for len(*tokens) > 0 {
-		token := (*tokens)[0]
+	for {
+		token := lexer.PeekNonWs()
 
-		if token == "^" {
-			*tokens = (*tokens)[1:]
-			nextPrimary, err := parsePrimary(tokens)
+		if token.value == "^" {
+			lexer.NextNonWs()
+			nextPrimary, err := parsePrimary(lexer)
 			if err != nil {
 				return Value{}, err
 			}
 			result.Number = math.Pow(result.Number, nextPrimary.Number)
-		} else if token == "to" {
-			*tokens = (*tokens)[1:]
-			if len(*tokens) > 0 {
-				toUnit := (*tokens)[0]
-				*tokens = (*tokens)[1:]
-				converted, err := convert(result, toUnit)
+		} else if token.value == "to" {
+			lexer.NextNonWs()
+			if lexer.HasNext() {
+				toUnit := lexer.PeekNonWs()
+				lexer.NextNonWs()
+				converted, err := convert(result, toUnit.value)
 				if err != nil {
 					return Value{}, err
 				}
@@ -197,42 +176,41 @@ func parseFactor(tokens *[]string) (Value, error) {
 }
 
 // Function to parse and evaluate a primary (number, negation, or expression in brackets)
-func parsePrimary(tokens *[]string) (Value, error) {
-	if len(*tokens) == 0 {
+func parsePrimary(lexer *Lexer) (Value, error) {
+	if !lexer.HasNext() {
 		return Value{}, fmt.Errorf("unexpected end of expression")
 	}
 
-	token := (*tokens)[0]
-	*tokens = (*tokens)[1:]
+	token := lexer.NextNonWs()
 
 	functions := []string{"sqrt", "log", "ln", "sin", "cos", "tan", "asin", "acos", "atan"}
 
-	if token == "(" {
-		result, err := parseExpression(tokens)
+	if token.value == "(" {
+		result, err := parseExpression(lexer)
 		if err != nil {
 			return Value{}, err
 		}
-		if len(*tokens) == 0 || (*tokens)[0] != ")" {
+		if lexer.NextNonWs().value != ")" {
 			return Value{}, fmt.Errorf("missing closing bracket")
 		}
-		*tokens = (*tokens)[1:]
+
 		return result, nil
-	} else if token == "-" {
-		primary, err := parsePrimary(tokens)
+	} else if token.value == "-" {
+		primary, err := parsePrimary(lexer)
 		if err != nil {
 			return Value{}, err
 		}
 		primary.Number = -primary.Number
 		return primary, nil
-	} else if slices.Contains(functions, token) {
-		if len(*tokens) == 0 {
-			return Value{}, fmt.Errorf("expected argument for %s", token)
+	} else if slices.Contains(functions, token.value) {
+		if !lexer.HasNext() {
+			return Value{}, fmt.Errorf("expected argument for %v", token)
 		}
-		arg, err := parsePrimary(tokens)
+		arg, err := parsePrimary(lexer)
 		if err != nil {
 			return Value{}, err
 		}
-		switch token {
+		switch token.value {
 		case "sqrt":
 			arg.Number = math.Sqrt(arg.Number)
 		case "ln":
@@ -253,9 +231,9 @@ func parsePrimary(tokens *[]string) (Value, error) {
 			arg.Number = math.Atan(arg.Number)
 		}
 		return arg, nil
-	} else if token == "pi" || token == "π" || token == "e" || token == "phi" {
+	} else if token.value == "pi" || token.value == "π" || token.value == "e" || token.value == "phi" {
 		var number float64
-		switch token {
+		switch token.value {
 		case "pi", "π":
 			number = math.Pi
 		case "e":
@@ -268,29 +246,27 @@ func parsePrimary(tokens *[]string) (Value, error) {
 	} else {
 		// Check if token is a currency symbol
 		unit := ""
-		if isoCode, ok := currencySymbols[token]; ok {
-			unit = isoCode
-			token = (*tokens)[0]
-			*tokens = (*tokens)[1:]
+		if token.kind == TokenCurrency {
+			unit = currencySymbols[token.value]
+			token = lexer.NextNonWs()
 		}
 
-		number, err := strconv.ParseFloat(token, 64)
-		if err != nil {
-			return Value{}, err
-		}
+		number := token.n
 
 		if unit == "" {
-			if len(*tokens) > 0 && (unicode.IsLetter(rune((*tokens)[0][0])) || (*tokens)[0][0] == '$') {
-				if isoCode, ok := currencySymbols[(*tokens)[0]]; ok {
-					unit = isoCode
-					*tokens = (*tokens)[1:]
-				} else if (*tokens)[0] != "mod" && (*tokens)[0] != "of" && (*tokens)[0] != "to" {
-					unit = (*tokens)[0]
-					*tokens = (*tokens)[1:]
+			switch lexer.PeekNonWs().kind {
+			case TokenCurrency:
+				unit = currencySymbols[lexer.NextNonWs().value]
+			case TokenText:
+				val := lexer.PeekNonWs().value
+				if val != "mod" && val != "of" && val != "to" {
+					unit = lexer.NextNonWs().value
 				}
 			}
 		}
 
-		return Value{Number: number, Unit: unit}, nil
+		asFloat, _ := number.Float64()
+
+		return Value{Number: asFloat, Unit: unit}, nil
 	}
 }

@@ -1,7 +1,6 @@
 package calculator
 
 import (
-	"log"
 	"math/big"
 	"testing"
 )
@@ -339,9 +338,7 @@ func TestPeeking(t *testing.T) {
 		t.Errorf("Expected number, got %v", tok.kind)
 	}
 
-	log.Println("peek 2")
 	tok = l.PeekN(2)
-	log.Println("peek 2", tok)
 	if tok.kind != TokenNumber {
 		t.Errorf("Expected number, got %v", tok.kind)
 	}
