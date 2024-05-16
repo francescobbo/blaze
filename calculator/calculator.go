@@ -2,10 +2,10 @@ package calculator
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"slices"
 	"strconv"
-	"strings"
 	"unicode"
 )
 
@@ -31,80 +31,20 @@ func Evaluate(expression string) (Value, error) {
 
 // Function to tokenize the expression
 func tokenize(expression string) []string {
-	var tokens []string
-	var numberBuilder strings.Builder
-	var wordBuilder strings.Builder
+	lexer := NewLexer(&expression)
+	tokens := lexer.TokenizeAll()
 
-	var asRune = []rune(expression)
-
-	for i := 0; i < len(asRune); i++ {
-		ch := asRune[i]
-
-		if _, ok := currencySymbols[string(ch)]; ok {
-			if numberBuilder.Len() > 0 {
-				tokens = append(tokens, numberBuilder.String())
-				numberBuilder.Reset()
-			}
-			if wordBuilder.Len() > 0 {
-				tokens = append(tokens, wordBuilder.String())
-				wordBuilder.Reset()
-			}
-			tokens = append(tokens, string(ch))
-		} else if unicode.IsDigit(ch) || ch == '.' {
-			if wordBuilder.Len() > 0 {
-				tokens = append(tokens, wordBuilder.String())
-				wordBuilder.Reset()
-			}
-			numberBuilder.WriteRune(ch)
-		} else if unicode.IsLetter(ch) {
-			if numberBuilder.Len() > 0 {
-				ttokens := numberBuilder.String()
-				if ttokens[len(ttokens)-1] == ' ' {
-					ttokens = ttokens[:len(ttokens)-1]
-				}
-				tokens = append(tokens, ttokens)
-				numberBuilder.Reset()
-			}
-			wordBuilder.WriteRune(ch)
-			if wordBuilder.String() == "mod" || wordBuilder.String() == "of" || wordBuilder.String() == "to" {
-				tokens = append(tokens, wordBuilder.String())
-				wordBuilder.Reset()
-			}
-		} else if ch == ' ' {
-			if numberBuilder.Len() > 0 {
-				tokens = append(tokens, numberBuilder.String())
-				numberBuilder.Reset()
-			}
-			if wordBuilder.Len() > 0 {
-				tokens = append(tokens, wordBuilder.String())
-				wordBuilder.Reset()
-			}
-		} else {
-			if numberBuilder.Len() > 0 {
-				tokens = append(tokens, numberBuilder.String())
-				numberBuilder.Reset()
-			}
-			if wordBuilder.Len() > 0 {
-				tokens = append(tokens, wordBuilder.String())
-				wordBuilder.Reset()
-			}
-
-			if ch == '*' && i+1 < len(asRune) && expression[i+1] == '*' {
-				tokens = append(tokens, "**")
-				i++
-			} else {
-				tokens = append(tokens, string(ch))
-			}
+	// Convert tokens to strings
+	var tokenStrings []string
+	for _, token := range tokens {
+		if token.kind != TokenWhitespace {
+			tokenStrings = append(tokenStrings, token.value)
 		}
 	}
-	if numberBuilder.Len() > 0 {
-		tokens = append(tokens, numberBuilder.String())
-	}
-	if wordBuilder.Len() > 0 {
-		tokens = append(tokens, wordBuilder.String())
-	}
 
-	return tokens
+	log.Println(tokenStrings)
+
+	return tokenStrings
 }
 
 // Function to parse and evaluate an expression
