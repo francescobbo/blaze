@@ -36,7 +36,7 @@ func parseExpression(lexer *Lexer) (Value, error) {
 	for {
 		token := lexer.PeekNonWs()
 
-		if token.kind == TokenOperator && (token.value == "+" || token.value == "-") {
+		if token.kind == TokenPlus || token.kind == TokenMinus {
 			lexer.NextNonWs()
 			nextTerm, err := parseTerm(lexer)
 			if err != nil {
@@ -51,7 +51,7 @@ func parseExpression(lexer *Lexer) (Value, error) {
 					return Value{}, err
 				}
 			}
-			if token.value == "+" {
+			if token.kind == TokenPlus {
 				result.Number += nextTerm.Number
 			} else {
 				result.Number -= nextTerm.Number

@@ -51,6 +51,7 @@ func TestCalculator(t *testing.T) {
 		{"2 * pi", 6.283185, ""},
 		{"e * pi", 8.539734, ""},
 		{"phi", 1.618034, ""},
+		{".15+,15", 0.30, ""},
 	}
 
 	for _, test := range tests {

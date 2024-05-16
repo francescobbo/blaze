@@ -21,10 +21,18 @@ type TokenKind string
 const (
 	TokenNumber     TokenKind = "Number"
 	TokenWhitespace TokenKind = "Whitespace"
-	TokenOperator   TokenKind = "Operator"
 	TokenText       TokenKind = "Text"
 	TokenCurrency   TokenKind = "Currency"
 	TokenEnd        TokenKind = "End"
+
+	TokenPlus    TokenKind = "+"
+	TokenMinus   TokenKind = "-"
+	TokenTimes   TokenKind = "*"
+	TokenDiv     TokenKind = "/"
+	TokenPow     TokenKind = "^"
+	TokenPercent TokenKind = "%"
+	TokenLParen  TokenKind = "("
+	TokenRParen  TokenKind = ")"
 )
 
 type Token struct {
@@ -80,19 +88,31 @@ func (l *Lexer) Next() Token {
 		}
 
 		switch ch {
-		case '+', '-', '/', '^', '(', ')', '%':
-			return Token{kind: TokenOperator, value: string(ch)}
+		case '+':
+			return Token{kind: TokenPlus, value: "+"}
+		case '-':
+			return Token{kind: TokenMinus, value: "-"}
+		case '/':
+			return Token{kind: TokenDiv, value: "/"}
+		case '%':
+			return Token{kind: TokenPercent, value: "%"}
+		case '(':
+			return Token{kind: TokenLParen, value: "("}
+		case ')':
+			return Token{kind: TokenRParen, value: ")"}
+		case '^':
+			return Token{kind: TokenPow, value: "^"}
 		case '*':
 			// Peek ahead to see if this is a ** operator (aka ^)
 			if l.position < l.length {
 				if l.expression[l.position] == '*' {
 					l.position++
-					return Token{kind: TokenOperator, value: "^"}
+					return Token{kind: TokenPow, value: "^"}
 				} else {
-					return Token{kind: TokenOperator, value: "*"}
+					return Token{kind: TokenTimes, value: "*"}
 				}
 			} else {
-				return Token{kind: TokenOperator, value: "*"}
+				return Token{kind: TokenTimes, value: "*"}
 			}
 		}
 	}
