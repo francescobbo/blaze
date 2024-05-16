@@ -3,6 +3,8 @@ module github.com/francescobbo/blaze
 go 1.22.3
 
 require (
+	github.com/antlr4-go/antlr v0.0.0-20230518091524-98b52378c522
+	github.com/antlr4-go/antlr/v4 v4.13.1
 	github.com/charmbracelet/bubbles v0.18.0
 	github.com/charmbracelet/bubbletea v0.26.2
 	github.com/mattn/go-sqlite3 v1.14.22
@@ -23,11 +25,12 @@ require (
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.15.2 // indirect
 	github.com/rivo/uniseg v0.4.6 // indirect
-	golang.org/x/exp v0.0.0-20190731235908-ec7cb31e5a56 // indirect
-	golang.org/x/image v0.6.0 // indirect
-	golang.org/x/mobile v0.0.0-20230301163155-e0f57694e12c // indirect
+	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
+	golang.org/x/exp/shiny v0.0.0-20240506185415-9bf2ced13842 // indirect
+	golang.org/x/image v0.14.0 // indirect
+	golang.org/x/mobile v0.0.0-20231127183840-76ac6878050a // indirect
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/term v0.20.0 // indirect
-	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 )

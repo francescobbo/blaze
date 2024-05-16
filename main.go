@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -46,6 +47,7 @@ func initialModel() model {
 	ti.Placeholder = "Calculate anything..."
 	ti.Focus()
 	ti.CharLimit = 156
+	ti.Cursor.SetMode(cursor.CursorStatic)
 
 	return model{
 		textInput:        ti,
@@ -56,7 +58,7 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	return textinput.Blink
+	return nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -81,7 +83,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.textInput, cmd = m.textInput.Update(msg)
 
-	res, err := calculator.Evaluate(m.textInput.Value())
+	res, err := calculator.AntlrEvaluate(m.textInput.Value())
 	m.calculatorResult = res
 	m.calculatorError = err
 
