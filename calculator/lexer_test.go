@@ -1,6 +1,7 @@
 package calculator
 
 import (
+	"log"
 	"math/big"
 	"testing"
 )
@@ -321,5 +322,71 @@ func testCases(t *testing.T, cases []testCase) {
 				}
 			}
 		})
+	}
+}
+
+func TestPeeking(t *testing.T) {
+	expr := "2+3"
+
+	l := NewLexer(&expr)
+	tok := l.Peek()
+	if tok.kind != TokenNumber {
+		t.Errorf("Expected number, got %v", tok.kind)
+	}
+
+	tok = l.Next()
+	if tok.kind != TokenNumber {
+		t.Errorf("Expected number, got %v", tok.kind)
+	}
+
+	log.Println("peek 2")
+	tok = l.PeekN(2)
+	log.Println("peek 2", tok)
+	if tok.kind != TokenNumber {
+		t.Errorf("Expected number, got %v", tok.kind)
+	}
+
+	tok = l.Next()
+	if tok.kind != TokenOperator {
+		t.Errorf("Expected operator, got %v", tok.kind)
+	}
+
+	tok = l.Next()
+	if tok.kind != TokenNumber {
+		t.Errorf("Expected number, got %v", tok.kind)
+	}
+}
+
+func TestWhitespaceHandling(t *testing.T) {
+	expr := "2 + 3"
+
+	l := NewLexer(&expr)
+	l.Next()
+
+	tok := l.Peek()
+	if tok.kind != TokenWhitespace {
+		t.Errorf("Expected whitespace, got %v", tok.kind)
+	}
+
+	tok = l.NextNonWs()
+	if tok.kind != TokenOperator {
+		t.Errorf("Expected operator, got %v", tok.kind)
+	}
+
+	tok = l.NextNonWs()
+	if tok.kind != TokenNumber {
+		t.Errorf("Expected number, got %v", tok.kind)
+	}
+
+	expr = "    +3"
+	l = NewLexer(&expr)
+	tok = l.PeekNonWs()
+	if tok.kind != TokenOperator {
+		t.Errorf("Expected operator, got %v", tok.kind)
+	}
+
+	tok = l.Next()
+	if tok.kind != TokenWhitespace {
+		t.Errorf("Expected whitespace, got %v", tok.kind)
 	}
 }

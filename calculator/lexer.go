@@ -12,6 +12,8 @@ type Lexer struct {
 	expression []rune // Pointer to the expression
 	position   int    // rune position
 	length     int    // length of the expression
+
+	buffer []Token // allows for peeking ahead
 }
 
 type TokenKind string
@@ -46,6 +48,12 @@ func NewLexer(input *string) *Lexer {
 }
 
 func (l *Lexer) Next() Token {
+	if len(l.buffer) > 0 {
+		token := l.buffer[0]
+		l.buffer = l.buffer[1:]
+		return token
+	}
+
 	for {
 		ch := l.nextRune()
 		if ch == 0 {
@@ -87,6 +95,51 @@ func (l *Lexer) Next() Token {
 				return Token{kind: TokenOperator, value: "*"}
 			}
 		}
+	}
+}
+
+func (l *Lexer) HasNext() bool {
+	return l.Peek().kind != TokenEnd
+}
+
+func (l *Lexer) NextNonWs() Token {
+	for {
+		token := l.Next()
+		if token.kind != TokenWhitespace {
+			return token
+		}
+	}
+}
+
+func (l *Lexer) Peek() Token {
+	if len(l.buffer) == 0 {
+		l.buffer = append(l.buffer, l.Next())
+	}
+
+	return l.buffer[0]
+}
+
+func (l *Lexer) PeekN(n int) Token {
+	if len(l.buffer) < n {
+		newBuffer := make([]Token, n)
+		for i := 0; i < n; i++ {
+			newBuffer[i] = l.Next()
+		}
+		l.buffer = newBuffer
+	}
+
+	return l.buffer[n-1]
+}
+
+func (l *Lexer) PeekNonWs() Token {
+	n := 1
+	for {
+		token := l.PeekN(n)
+		if token.kind != TokenWhitespace {
+			return token
+		}
+
+		n++
 	}
 }
 

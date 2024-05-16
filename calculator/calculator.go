@@ -168,7 +168,7 @@ func parseFactor(tokens *[]string) (Value, error) {
 	for len(*tokens) > 0 {
 		token := (*tokens)[0]
 
-		if token == "^" || token == "**" {
+		if token == "^" {
 			*tokens = (*tokens)[1:]
 			nextPrimary, err := parsePrimary(tokens)
 			if err != nil {
