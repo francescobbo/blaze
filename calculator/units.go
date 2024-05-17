@@ -56,6 +56,8 @@ var volumeUnits = map[string]float64{
 	"qt":   1056.69,
 	"pt":   2113.38,
 	"cup":  4226.75,
+	"tbsp": 67628,
+	"tsp":  202884,
 	"floz": 33814,
 }
 
@@ -153,6 +155,10 @@ func convertWith(value Value, toUnit string, table map[string]float64) (Value, e
 func convertTemperature(value Value, toUnit string) (Value, error) {
 	if value.Unit == toUnit {
 		return value, nil
+	}
+
+	if toUnit != "f" && toUnit != "c" && toUnit != "k" {
+		return Value{}, fmt.Errorf("unknown unit %s", toUnit)
 	}
 
 	var kValue float64

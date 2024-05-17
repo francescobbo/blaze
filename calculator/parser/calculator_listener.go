@@ -1,8 +1,7 @@
-// Code generated from calculator/parser/Calculator.g4 by ANTLR 4.9.2. DO NOT EDIT.
+// Code generated from Calculator.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // Calculator
-
-import "github.com/antlr/antlr4/runtime/Go/antlr"
+import "github.com/antlr4-go/antlr/v4"
 
 // CalculatorListener is a complete listener for a parse tree produced by CalculatorParser.
 type CalculatorListener interface {
@@ -29,9 +28,6 @@ type CalculatorListener interface {
 	// EnterPercentage is called when entering the percentage production.
 	EnterPercentage(c *PercentageContext)
 
-	// EnterCurrency is called when entering the currency production.
-	EnterCurrency(c *CurrencyContext)
-
 	// EnterUnit is called when entering the unit production.
 	EnterUnit(c *UnitContext)
 
@@ -55,9 +51,6 @@ type CalculatorListener interface {
 
 	// ExitPercentage is called when exiting the percentage production.
 	ExitPercentage(c *PercentageContext)
-
-	// ExitCurrency is called when exiting the currency production.
-	ExitCurrency(c *CurrencyContext)
 
 	// ExitUnit is called when exiting the unit production.
 	ExitUnit(c *UnitContext)

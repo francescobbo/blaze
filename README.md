@@ -11,14 +11,40 @@ here it is.
 
 > Absolutely experimental, use at your own risk.
 
+## Build / Install
+
+To get started quickly, run the following command to install `blaze` in your 
+`$GOPATH/bin`:
+
+```
+go install github.com/francescobbo/blaze@latest
+```
+
+If you want to build from source:
+
+```
+git clone https://github.com/francescobbo/blaze.git
+cd blaze
+go generate ./...
+go build
+```
+
+You can also run the tests:
+
+```
+go test ./...
+```
+
 ## Built with AI
 
-This project has been built in about 4 hours. The bulk of tokenization, parsing
-and evaluation has been iteratively built by ChatGPT with my (human)
-interventions where it couldn't figure out the right way to proceed.
+This project started off with a heavy reliance on AI for code generation. In
+just a few hours of work there was a decent working prototype with a
+"handcrafted" tokenizer, parser and evaluator.
 
-GitHub Copilot was also quite helpful in suggesting code snippets, especially
-around boilerplate setup and error handling.
+Since I wanted to add more complexity to the project, I decided to rewrite the
+tokenizer and parser with [ANTLR4](https://www.antlr.org/). LLMs still helped
+crafting the grammar, but failed miserably when it came to visiting the parse
+tree.
 
 ## Example
 
@@ -53,8 +79,8 @@ around boilerplate setup and error handling.
 12. Currency conversion: `10 usd to eur`, `10 eur to usd`, `1 btc to usd`
 13. All of the above can be combined in a single expression:
     - `10 usd to eur * 5 + 10%`
-    - `sqrt(10 kg to g)`
-    - `cos(2*pi) * 2 btc to usd`
+    - `sqrt(10 kg in g)`
+    - `cos(2pi) * 2 btc to usd`
 
 **Note**: currency rates are obtained from
 [ExchangeRate-API](https://www.exchangerate-api.com/) and

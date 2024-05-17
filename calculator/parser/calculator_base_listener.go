@@ -1,8 +1,7 @@
-// Code generated from calculator/parser/Calculator.g4 by ANTLR 4.9.2. DO NOT EDIT.
+// Code generated from Calculator.g4 by ANTLR 4.13.1. DO NOT EDIT.
 
 package parser // Calculator
-
-import "github.com/antlr/antlr4/runtime/Go/antlr"
+import "github.com/antlr4-go/antlr/v4"
 
 // BaseCalculatorListener is a complete listener for a parse tree produced by CalculatorParser.
 type BaseCalculatorListener struct{}
@@ -62,12 +61,6 @@ func (s *BaseCalculatorListener) EnterPercentage(ctx *PercentageContext) {}
 
 // ExitPercentage is called when production percentage is exited.
 func (s *BaseCalculatorListener) ExitPercentage(ctx *PercentageContext) {}
-
-// EnterCurrency is called when production currency is entered.
-func (s *BaseCalculatorListener) EnterCurrency(ctx *CurrencyContext) {}
-
-// ExitCurrency is called when production currency is exited.
-func (s *BaseCalculatorListener) ExitCurrency(ctx *CurrencyContext) {}
 
 // EnterUnit is called when production unit is entered.
 func (s *BaseCalculatorListener) EnterUnit(ctx *UnitContext) {}
