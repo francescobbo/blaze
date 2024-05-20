@@ -1,6 +1,6 @@
 #![no_main]
 
-use parser::parser::Tokenizer;
+use parser::parser::tokenizer::Tokenizer;
 
 use libfuzzer_sys::fuzz_target;
 

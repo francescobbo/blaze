@@ -1,0 +1,86 @@
+use crate::parser::tokenizer;
+use crate::ast::Expr;
+
+grammar;
+
+extern {
+    type Location = usize;
+    type Error = tokenizer::Error;
+
+    enum tokenizer::Token {
+        number => tokenizer::Token::Number(_),
+        // text => tokenizer::Token::Text(_),
+        percent => tokenizer::Token::Percent(_),
+        functionCall => tokenizer::Token::FunctionCall(_),
+        neg => tokenizer::Token::UnaryNeg,
+        not => tokenizer::Token::UnaryNot,
+        fact => tokenizer::Token::Factorial,
+        lparen => tokenizer::Token::LParen,
+        rparen => tokenizer::Token::RParen,
+
+        OpAdd => tokenizer::Token::OpAdd,
+        OpSub => tokenizer::Token::OpSub,
+        OpMul => tokenizer::Token::OpMul,
+        OpDiv => tokenizer::Token::OpDiv,
+        OpPow => tokenizer::Token::OpPow,
+        OpMod => tokenizer::Token::OpMod,
+        OpOr => tokenizer::Token::OpOr,
+        OpAnd => tokenizer::Token::OpAnd,
+        OpXor => tokenizer::Token::OpXor,
+        OpShl => tokenizer::Token::OpShl,
+        OpShr => tokenizer::Token::OpShr,
+        OpRol => tokenizer::Token::OpRol,
+        OpRor => tokenizer::Token::OpRor,
+    }
+}
+
+pub Expr: Box<Expr> = {
+    #[precedence(level="0")] // Highest precedence
+    <t:Term> => t,
+    neg <t:Term> => Box::new(Expr::UnaryNegation(t)),
+    not <t:Term> => Box::new(Expr::UnaryNot(t)),
+    <t:Term> fact => Box::new(Expr::UnaryFactorial(t)),
+    #[precedence(level="1")] #[assoc(side="right")]
+    <l:Expr> OpPow <r:Expr> => Box::new(Expr::Power(l, r)),
+    #[precedence(level="2")] #[assoc(side="right")]
+    <fc:functionCall> <e:Expr> => {
+        match fc {
+            tokenizer::Token::FunctionCall(f) => Box::new(Expr::FunctionCall(f, vec![*e])),
+            _ => unreachable!()
+        }
+    },
+    #[precedence(level="3")] #[assoc(side="left")]
+    <l:Expr> OpMul <r:Expr> => Box::new(Expr::Multiply(l, r)),
+    <l:Expr> OpDiv <r:Expr> => Box::new(Expr::Divide(l, r)),
+    <l:Expr> OpMod <r:Expr> => Box::new(Expr::Modulo(l, r)),
+    #[precedence(level="4")] #[assoc(side="left")]
+    <l:Expr> OpAdd <r:Expr> => Box::new(Expr::Add(l, r)),
+    <l:Expr> OpSub <r:Expr> => Box::new(Expr::Subtract(l, r)),
+    #[precedence(level="5")] #[assoc(side="left")]
+    <l:Expr> OpShl <r:Expr> => Box::new(Expr::ShiftLeft(l, r)),
+    <l:Expr> OpShr <r:Expr> => Box::new(Expr::ShiftRight(l, r)),
+    <l:Expr> OpRol <r:Expr> => Box::new(Expr::RotateLeft(l, r)),
+    <l:Expr> OpRor <r:Expr> => Box::new(Expr::RotateRight(l, r)),
+    #[precedence(level="6")] #[assoc(side="left")]
+    <l:Expr> OpAnd <r:Expr> => Box::new(Expr::And(l, r)),
+    #[precedence(level="7")] #[assoc(side="left")]
+    <l:Expr> OpXor <r:Expr> => Box::new(Expr::Xor(l, r)),
+    #[precedence(level="8")] #[assoc(side="left")]
+    <l:Expr> OpOr <r:Expr> => Box::new(Expr::Or(l, r)),
+};
+
+Term: Box<Expr> = {
+    <n:number> => {
+        match n {
+            tokenizer::Token::Number(v) => Box::new(Expr::Number(v)),
+            _ => unreachable!()
+        }
+    },
+    <p:percent> => {
+        match p {
+            tokenizer::Token::Percent(v) => Box::new(Expr::Percent(v)),
+            _ => unreachable!()
+        }
+    },
+    lparen <Expr> rparen
+};

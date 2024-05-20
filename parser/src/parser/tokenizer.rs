@@ -29,22 +29,18 @@ pub enum Token {
     FunctionCall(String),
     UnaryNeg,
     UnaryNot,
-    BinaryOp(OpCode),
     Factorial,
     LParen,
     RParen,
+
+    OpAdd, OpSub,
+    OpMul, OpDiv,
+    OpPow, OpMod,
+    OpOr, OpAnd, OpXor,
+    OpShl, OpShr, OpRol, OpRor,
+
     Eof,
 }
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum OpCode {
-    Add, Sub,
-    Mul, Div,
-    Pow, Mod,
-    Or, And, Xor,
-    Shl, Shr, Rol, Ror,
-}
-
 
 #[derive(Debug, PartialEq)]
 enum State {
@@ -59,8 +55,37 @@ enum State {
     Eof,
 }
 
+static mut FUNCTIONS: Vec<&'static str> = Vec::new();
+
 impl<'input> Tokenizer<'input> {
     pub fn new(input: &'input str) -> Self {
+        unsafe {
+            FUNCTIONS = vec![
+                "abs",
+                "acos",
+                "acosh",
+                "asin",
+                "asinh",
+                "atan",
+                "atanh",
+                "cbrt",
+                "ceil",
+                "cos",
+                "cosh",
+                "exp",
+                "floor",
+                "ln",
+                "log",
+                "round",
+                "sin",
+                "sinh",
+                "sqrt",
+                "tan",
+                "tanh",
+                "trunc",
+            ];
+        }
+
         Tokenizer {
             input: input.chars(),
             pos: 0,
@@ -71,7 +96,7 @@ impl<'input> Tokenizer<'input> {
 
             // Later we'll plug in the actual functions
             is_const: |s| s == "pi" || s == "e",
-            is_func: |s| s == "sin" || s == "cos" || s == "tan" || s == "log" || s == "ln",
+            is_func: |s| unsafe { FUNCTIONS.contains(&s) },
         }
     }
 
@@ -81,6 +106,13 @@ impl<'input> Tokenizer<'input> {
         }
 
         self.tokens.clone()
+    }
+
+    pub fn run_without_eof(&mut self) -> Vec<LalrpopToken> {
+        self.run()
+            .into_iter()
+            .take_while(|t| t.is_ok() && t.as_ref().unwrap().1 != Token::Eof)
+            .collect()
     }
 
     pub fn step(&mut self) {
@@ -153,7 +185,7 @@ impl<'input> Tokenizer<'input> {
 
                         self.state = State::BeforeOp;
                     },
-                    Some(c) if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' => {
+                    Some(c) if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '&' || c == '|' || c == '<' || c == '>' => {
                         self.produce(Token::Number(self.buffer.clone()));
                         self.state = State::BeforeOp;
                     },
@@ -161,7 +193,7 @@ impl<'input> Tokenizer<'input> {
                         // This is an implicit multiplication (e.g. 2(3+4)), so insert a multiplication operator
                         self.consume();
                         self.produce(Token::Number(self.buffer.clone()));
-                        self.produce(Token::BinaryOp(OpCode::Mul));
+                        self.produce(Token::OpMul);
                         self.produce(Token::LParen);
 
                         self.state = State::BeforeExpr;
@@ -195,14 +227,14 @@ impl<'input> Tokenizer<'input> {
                 let next = self.peek();
 
                 match next {
-                    Some(c) if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '%' => {
+                    Some(c) if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '%' || c == '&' || c == '|' || c == '<' || c == '>' => {
                         self.state = State::BeforeOp;
                     },
                     Some(c) if c == '(' => {
                         // This is an implicit multiplication (e.g. 2 (3+4)), so insert a multiplication operator
                         // However, it's kind of weird to have a space before an opening parenthesis, so we'll also produce an error
                         self.consume();
-                        self.produce(Token::BinaryOp(OpCode::Mul));
+                        self.produce(Token::OpMul);
                         self.produce(Token::LParen);
                         self.produce_error(Error::UnexpectedCharacter(c));
                         self.state = State::BeforeExpr;
@@ -243,7 +275,7 @@ impl<'input> Tokenizer<'input> {
                 let next = self.peek();
 
                 match next {
-                    Some(c) if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' => {
+                    Some(c) if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '%' || c == '&' || c == '|' || c == '<' || c == '>' => {
                         self.produce(Token::Percent(self.buffer.clone()));
                         self.state = State::BeforeOp;
                     },
@@ -261,7 +293,7 @@ impl<'input> Tokenizer<'input> {
                         self.consume();
 
                         self.produce(Token::Number(self.buffer.clone()));
-                        self.produce(Token::BinaryOp(OpCode::Mod));
+                        self.produce(Token::OpMod);
                         self.produce(Token::LParen);
 
                         self.state = State::BeforeExpr;
@@ -286,12 +318,12 @@ impl<'input> Tokenizer<'input> {
                 match next {
                     Some(c) if c == '+' => {
                         self.consume();
-                        self.produce(Token::BinaryOp(OpCode::Add));
+                        self.produce(Token::OpAdd);
                         self.state = State::BeforeExpr;
                     },
                     Some(c) if c == '-' => {
                         self.consume();
-                        self.produce(Token::BinaryOp(OpCode::Sub));
+                        self.produce(Token::OpSub);
                         self.state = State::BeforeExpr;
                     },
                     Some(c) if c == '*' => {
@@ -299,25 +331,57 @@ impl<'input> Tokenizer<'input> {
 
                         if self.peek() == Some('*') {
                             self.consume();
-                            self.produce(Token::BinaryOp(OpCode::Pow));
+                            self.produce(Token::OpPow);
                         } else {
-                            self.produce(Token::BinaryOp(OpCode::Mul));
+                            self.produce(Token::OpMul);
                         }
                         self.state = State::BeforeExpr;
                     },
                     Some(c) if c == '/' => {
                         self.consume();
-                        self.produce(Token::BinaryOp(OpCode::Div));
+                        self.produce(Token::OpDiv);
                         self.state = State::BeforeExpr;
                     },
                     Some(c) if c == '^' => {
                         self.consume();
-                        self.produce(Token::BinaryOp(OpCode::Pow));
+                        self.produce(Token::OpPow);
                         self.state = State::BeforeExpr;
                     },
                     Some(c) if c == '%' => {
                         self.consume();
-                        self.produce(Token::BinaryOp(OpCode::Mod));
+                        self.produce(Token::OpMod);
+                        self.state = State::BeforeExpr;
+                    }
+                    Some(c) if c == '&' => {
+                        self.consume();
+                        self.produce(Token::OpAnd);
+                        self.state = State::BeforeExpr;
+                    }
+                    Some(c) if c == '|' => {
+                        self.consume();
+                        self.produce(Token::OpOr);
+                        self.state = State::BeforeExpr;
+                    }
+                    Some(c) if c == '<' => {
+                        self.consume();
+                        if self.peek() == Some('<') {
+                            self.consume();
+                            self.produce(Token::OpShl);
+                        } else {
+                            self.produce_error(Error::UnexpectedCharacter(c));
+                            self.produce(Token::Eof);
+                        }
+                        self.state = State::BeforeExpr;
+                    }
+                    Some(c) if c == '>' => {
+                        self.consume();
+                        if self.peek() == Some('>') {
+                            self.consume();
+                            self.produce(Token::OpShr);
+                        } else {
+                            self.produce_error(Error::UnexpectedCharacter(c));
+                            self.produce(Token::Eof);
+                        }
                         self.state = State::BeforeExpr;
                     }
                     Some(c) if c == ')' => {
@@ -353,23 +417,45 @@ impl<'input> Tokenizer<'input> {
                 }
             }
             State::AfterNumberText => {
-                // If a number is followed by a word, it may be a function or a constant (implicit multiplication: 3pi)
-                // or it could be an unit (3kg, 3m/s)
+                // If a number is followed by a word, it may be:
+                // - a function or a constant (implicit multiplication: 3pi)
+                // - a textual operator: mod, xor, rol, ror (e.g. 3 mod 4)
+                // - a unit (e.g. 3 m/s)
 
                 self.buffer = self.read_word();
                 
                 if (self.is_const)(&self.buffer) {
                     // A constant is a number in disguise
-                    self.produce(Token::BinaryOp(OpCode::Mul));
+                    self.produce(Token::OpMul);
                     self.produce(Token::Number(self.buffer.clone()));
                     self.state = State::BeforeOp;
                 } else if (self.is_func)(&self.buffer) {
-                    self.produce(Token::BinaryOp(OpCode::Mul));
+                    self.produce(Token::OpMul);
                     self.produce(Token::FunctionCall(self.buffer.clone()));
                     self.state = State::BeforeExpr;
                 } else {
-                    // println!("This might be an unit: {:?}", self.buffer);
-                    self.state = State::BeforeOp;
+                    match self.buffer.as_str() {
+                        "mod" => {
+                            self.produce(Token::OpMod);
+                            self.state = State::BeforeExpr;
+                        },
+                        "xor" => {
+                            self.produce(Token::OpXor);
+                            self.state = State::BeforeExpr;
+                        },
+                        "rol" => {
+                            self.produce(Token::OpRol);
+                            self.state = State::BeforeExpr;
+                        },
+                        "ror" => {
+                            self.produce(Token::OpRor);
+                            self.state = State::BeforeExpr;
+                        },
+                        _ => {
+                            // println!("This might be an unit: {:?}", self.buffer);
+                            self.state = State::BeforeOp;
+                        }
+                    }
                 }
             },
             State::Eof => {
@@ -389,6 +475,8 @@ impl<'input> Tokenizer<'input> {
             Token::Text(ref s) => s.len(),
             Token::Percent(ref s) => s.len() + 1,
             Token::FunctionCall(ref s) => s.len(),
+            Token::OpShl | Token::OpShr => 2,
+            Token::OpXor | Token::OpRol | Token::OpRor => 3,
             Token::Eof => 0,
             _ => 1
         };
@@ -524,7 +612,7 @@ mod tests {
             run("1 - -2"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Sub),
+                Token::OpSub,
                 Token::UnaryNeg,
                 Token::Number("2".to_string())
             ]
@@ -534,7 +622,7 @@ mod tests {
             run("3 - ~4"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Sub),
+                Token::OpSub,
                 Token::UnaryNot,
                 Token::Number("4".to_string())
             ]
@@ -568,7 +656,7 @@ mod tests {
             run("123 %"),
             vec![
                 Token::Number("123".to_string()),
-                Token::BinaryOp(OpCode::Mod)
+                Token::OpMod
             ]
         );
 
@@ -584,7 +672,7 @@ mod tests {
             run("123%pi"),
             vec![
                 Token::Percent("123".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("pi".to_string())
             ]
         );
@@ -605,7 +693,7 @@ mod tests {
             vec![
                 Token::Number("5".to_string()),
                 Token::Factorial,
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("3".to_string())
             ]
         )
@@ -617,7 +705,7 @@ mod tests {
             run("1 + 2"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("2".to_string())
             ]
         );
@@ -626,7 +714,7 @@ mod tests {
             run("1 - 2"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Sub),
+                Token::OpSub,
                 Token::Number("2".to_string())
             ]
         );
@@ -635,7 +723,7 @@ mod tests {
             run("1 * 2"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("2".to_string())
             ]
         );
@@ -644,7 +732,7 @@ mod tests {
             run("1 / 2"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Div),
+                Token::OpDiv,
                 Token::Number("2".to_string())
             ]
         );
@@ -653,7 +741,7 @@ mod tests {
             run("1 ^ 2"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Pow),
+                Token::OpPow,
                 Token::Number("2".to_string())
             ]
         );
@@ -662,7 +750,7 @@ mod tests {
             run("1 % 2"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Mod),
+                Token::OpMod,
                 Token::Number("2".to_string())
             ]
         );
@@ -671,9 +759,9 @@ mod tests {
             run("1 + 2 + 3"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("2".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("3".to_string())
             ]
         );
@@ -682,9 +770,9 @@ mod tests {
             run("1 + 2 * 3"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("2".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("3".to_string())
             ]
         );
@@ -693,7 +781,7 @@ mod tests {
             run("1 ** 2"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Pow),
+                Token::OpPow,
                 Token::Number("2".to_string())
             ]
         );
@@ -703,10 +791,100 @@ mod tests {
             vec![
                 Token::UnaryNeg,
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("4".to_string())
             ]
-        )
+        );
+
+        assert_eq!(
+            run("3&4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::OpAnd,
+                Token::Number("4".to_string())
+            ]
+        );
+
+        assert_eq!(
+            run("3|4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::OpOr,
+                Token::Number("4".to_string())
+            ]
+        );
+
+        assert_eq!(
+            run("3<<4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::OpShl,
+                Token::Number("4".to_string())
+            ]
+        );
+
+        assert_eq!(
+            run("3>>4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::OpShr,
+                Token::Number("4".to_string())
+            ]
+        );
+
+        assert_eq!(
+            run("3xor4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::OpXor,
+                Token::Number("4".to_string())
+            ]
+        );
+
+        assert_eq!(
+            run("3rol4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::OpRol,
+                Token::Number("4".to_string())
+            ]
+        );
+
+        assert_eq!(
+            run("3ror4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::OpRor,
+                Token::Number("4".to_string())
+            ]
+        );
+
+        assert_eq!(
+            run("3mod4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::OpMod,
+                Token::Number("4".to_string())
+            ]
+        );
+
+        assert_eq!(
+            run("3 xor 4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::OpXor,
+                Token::Number("4".to_string())
+            ]
+        );
+
+        assert_eq!(
+            run("3 mod 4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::OpMod,
+                Token::Number("4".to_string())
+            ]
+        );
     }
 
     #[test]
@@ -716,10 +894,10 @@ mod tests {
             vec![
                 Token::LParen,
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("2".to_string()),
                 Token::RParen,
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("3".to_string())
             ]
         );
@@ -728,10 +906,10 @@ mod tests {
             run("1 + (2 * 3)"),
             vec![
                 Token::Number("1".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::LParen,
                 Token::Number("2".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("3".to_string()),
                 Token::RParen
             ]
@@ -741,10 +919,10 @@ mod tests {
             run("3%(3 + 4)"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mod),
+                Token::OpMod,
                 Token::LParen,
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("4".to_string()),
                 Token::RParen
             ]
@@ -754,10 +932,10 @@ mod tests {
             run("3(5 + 4)"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::LParen,
                 Token::Number("5".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("4".to_string()),
                 Token::RParen
             ]
@@ -767,13 +945,13 @@ mod tests {
             run_fallible("3 (5 + 4) + 2").0,
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::LParen,
                 Token::Number("5".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("4".to_string()),
                 Token::RParen,
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("2".to_string())
             ]
         );
@@ -783,7 +961,7 @@ mod tests {
             vec![
                 Token::LParen,
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("2".to_string()),
                 Token::RParen
             ]
@@ -887,7 +1065,7 @@ mod tests {
             run("3pi"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("pi".to_string())
             ]
         );
@@ -896,7 +1074,7 @@ mod tests {
             run("3e"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("e".to_string())
             ]
         );
@@ -905,7 +1083,7 @@ mod tests {
             run("3sin(3)"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::FunctionCall("sin".to_string()),
                 Token::LParen,
                 Token::Number("3".to_string()),
@@ -917,7 +1095,7 @@ mod tests {
             run("3cos(3)"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::FunctionCall("cos".to_string()),
                 Token::LParen,
                 Token::Number("3".to_string()),
@@ -929,7 +1107,7 @@ mod tests {
             run("3tan3"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::FunctionCall("tan".to_string()),
                 Token::Number("3".to_string()),
             ]
@@ -939,7 +1117,7 @@ mod tests {
             run("3tan 3"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::FunctionCall("tan".to_string()),
                 Token::Number("3".to_string()),
             ]
@@ -952,7 +1130,7 @@ mod tests {
             run("3 * pi"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("pi".to_string())
             ]
         );
@@ -961,7 +1139,7 @@ mod tests {
             run("3 + e"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("e".to_string())
             ]
         );
@@ -970,7 +1148,7 @@ mod tests {
             run("3 - sin3"),
             vec![
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Sub),
+                Token::OpSub,
                 Token::FunctionCall("sin".to_string()),
                 Token::Number("3".to_string()),
             ]
@@ -980,7 +1158,7 @@ mod tests {
             run("pi sin 3"),
             vec![
                 Token::Number("pi".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::FunctionCall("sin".to_string()),
                 Token::Number("3".to_string()),
             ]
@@ -993,13 +1171,13 @@ mod tests {
             run("e ^ 2 - 3 * pi + 10%"),
             vec![
                 Token::Number("e".to_string()),
-                Token::BinaryOp(OpCode::Pow),
+                Token::OpPow,
                 Token::Number("2".to_string()),
-                Token::BinaryOp(OpCode::Sub),
+                Token::OpSub,
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("pi".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Percent("10".to_string())
             ]
         );
@@ -1008,18 +1186,18 @@ mod tests {
             run("2(3 + sin pi - 4^2) / e"),
             vec![
                 Token::Number("2".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::LParen,
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::FunctionCall("sin".to_string()),
                 Token::Number("pi".to_string()),
-                Token::BinaryOp(OpCode::Sub),
+                Token::OpSub,
                 Token::Number("4".to_string()),
-                Token::BinaryOp(OpCode::Pow),
+                Token::OpPow,
                 Token::Number("2".to_string()),
                 Token::RParen,
-                Token::BinaryOp(OpCode::Div),
+                Token::OpDiv,
                 Token::Number("e".to_string())
             ]
         );
@@ -1035,11 +1213,11 @@ mod tests {
                 Token::Number("45".to_string()),
                 Token::RParen,
                 Token::RParen,
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("pi".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("2".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("e".to_string())
             ]
         );
@@ -1048,9 +1226,9 @@ mod tests {
             run("2 * pi sin(30)"),
             vec![
                 Token::Number("2".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("pi".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::FunctionCall("sin".to_string()),
                 Token::LParen,
                 Token::Number("30".to_string()),
@@ -1062,15 +1240,15 @@ mod tests {
             run("pi e + 2pi * 3e"),
             vec![
                 Token::Number("pi".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("e".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::Number("2".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("pi".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("e".to_string())
             ]
         );
@@ -1079,7 +1257,7 @@ mod tests {
             run("pi% * e"),
             vec![
                 Token::Percent("pi".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("e".to_string())
             ]
         );
@@ -1091,17 +1269,17 @@ mod tests {
                 Token::LParen,
                 Token::LParen,
                 Token::Number("45".to_string()),
-                Token::BinaryOp(OpCode::Add),
+                Token::OpAdd,
                 Token::LParen,
                 Token::Number("30".to_string()),
-                Token::BinaryOp(OpCode::Mul),
+                Token::OpMul,
                 Token::Number("2".to_string()),
                 Token::RParen,
                 Token::RParen,
-                Token::BinaryOp(OpCode::Div),
+                Token::OpDiv,
                 Token::LParen,
                 Token::Number("3".to_string()),
-                Token::BinaryOp(OpCode::Pow),
+                Token::OpPow,
                 Token::Number("2".to_string()),
                 Token::RParen,
                 Token::RParen
@@ -1152,7 +1330,7 @@ mod tests {
             (
                 vec![
                     Token::Number("3".to_string()),
-                    Token::BinaryOp(OpCode::Mod),
+                    Token::OpMod,
                 ],
                 vec![Error::UnexpectedCharacter('@')]
             )
@@ -1172,7 +1350,7 @@ mod tests {
                 vec![
                     Token::LParen,
                     Token::Number("3".to_string()),
-                    Token::BinaryOp(OpCode::Add),
+                    Token::OpAdd,
                     Token::Number("2".to_string()),
                     Token::RParen
                 ],
