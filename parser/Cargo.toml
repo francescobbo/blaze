@@ -10,7 +10,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 lalrpop-util = { version = "0.20.2", features = ["lexer", "unicode"] }
-astro-float = "0.9.4"
 
 [build-dependencies]
 lalrpop = "0.20.2"

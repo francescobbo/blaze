@@ -12,6 +12,7 @@ pub struct Tokenizer<'input> {
     buffer: String,
 
     // The tokenizer needs help recognizing known functions or constants
+    // TODO: allow for custom functions
     is_const: fn(&str) -> bool,
     is_func: fn(&str) -> bool,
 }
@@ -76,6 +77,7 @@ impl<'input> Tokenizer<'input> {
                 "floor",
                 "ln",
                 "log",
+                "log2",
                 "round",
                 "sin",
                 "sinh",
@@ -408,12 +410,26 @@ impl<'input> Tokenizer<'input> {
                 if (self.is_const)(&self.buffer) {
                     // A constant is a number in disguise
                     self.state = State::AfterNumber;
-                } else if (self.is_func)(&self.buffer) {
-                    self.produce(Token::FunctionCall(self.buffer.clone()));
-                    self.state = State::BeforeExpr;
+                    self.skip(self.buffer.len());
                 } else {
-                    self.produce_error(Error::UnexpectedCharacter(self.buffer.chars().nth(0).unwrap()));
-                    self.produce(Token::Eof);
+                    // Some functions have numbers in their names. We'll greedily match the longest function name
+                    // against the buffer which contains "[a-z][a-z0-9]*"
+                    while self.buffer.len() > 0 {
+                        if (self.is_func)(&self.buffer) {
+                            self.skip(self.buffer.len());
+                            self.produce(Token::FunctionCall(self.buffer.clone()));
+                            self.state = State::BeforeExpr;
+                            break;
+                        }
+
+                        self.buffer.pop();
+                    }
+
+                    if self.buffer.len() == 0 {
+                        // We didn't find a function, so it must be arbitrary text at the beginning of the expression
+                        self.produce_error(Error::UnexpectedCharacter(self.peek().unwrap()));
+                        self.produce(Token::Eof);
+                    }
                 }
             }
             State::AfterNumberText => {
@@ -426,35 +442,48 @@ impl<'input> Tokenizer<'input> {
                 
                 if (self.is_const)(&self.buffer) {
                     // A constant is a number in disguise
+                    self.skip(self.buffer.len());
                     self.produce(Token::OpMul);
                     self.produce(Token::Number(self.buffer.clone()));
                     self.state = State::BeforeOp;
-                } else if (self.is_func)(&self.buffer) {
-                    self.produce(Token::OpMul);
-                    self.produce(Token::FunctionCall(self.buffer.clone()));
-                    self.state = State::BeforeExpr;
                 } else {
-                    match self.buffer.as_str() {
-                        "mod" => {
-                            self.produce(Token::OpMod);
-                            self.state = State::BeforeExpr;
-                        },
-                        "xor" => {
-                            self.produce(Token::OpXor);
-                            self.state = State::BeforeExpr;
-                        },
-                        "rol" => {
-                            self.produce(Token::OpRol);
-                            self.state = State::BeforeExpr;
-                        },
-                        "ror" => {
-                            self.produce(Token::OpRor);
-                            self.state = State::BeforeExpr;
-                        },
-                        _ => {
-                            // println!("This might be an unit: {:?}", self.buffer);
-                            self.state = State::BeforeOp;
+                    // Check the first 3 characters to see if it's a textual operator
+                    let mut op: Option<Token> = None;
+                    if self.buffer.len() >= 3 {
+                        if self.buffer.starts_with("mod") {
+                            op = Some(Token::OpMod);
+                        } else if self.buffer.starts_with("xor") {
+                            op = Some(Token::OpXor);
+                        } else if self.buffer.starts_with("rol") {
+                            op = Some(Token::OpRol);
+                        } else if self.buffer.starts_with("ror") {
+                            op = Some(Token::OpRor);
                         }
+                    }
+
+                    if op.is_none() {
+                        // It wasn't a textual operator, let's try matching function names
+                        while self.buffer.len() > 0 {
+                            if (self.is_func)(&self.buffer) {
+                                self.skip(self.buffer.len());
+                                self.produce(Token::OpMul);
+                                self.produce(Token::FunctionCall(self.buffer.clone()));
+                                self.state = State::BeforeExpr;
+                                break;
+                            }
+
+                            self.buffer.pop();
+                        }
+
+                        if self.buffer.len() == 0 {
+                            // We didn't find a function, so it must be an unit (TODO)
+                            self.produce_error(Error::UnexpectedCharacter(self.peek().unwrap()));
+                            self.produce(Token::Eof);
+                        }
+                    } else {
+                        self.skip(3);
+                        self.produce(op.unwrap());
+                        self.state = State::BeforeExpr;
                     }
                 }
             },
@@ -468,6 +497,7 @@ impl<'input> Tokenizer<'input> {
         if token == Token::Eof {
             self.state = State::Eof;
         }
+
 
         let end = self.pos;
         let size = match token {
@@ -504,12 +534,15 @@ impl<'input> Tokenizer<'input> {
         number
     }
 
+    // Reads the following word by peeking at the next characters
     fn read_word(&mut self) -> String {
         let mut text = String::new();
 
-        while let Some(c) = self.peek() {
-            if c.is_alphabetic() {
-                text.push(self.consume().unwrap());
+        let mut i = 0;
+        while let Some(c) = self.peek_nth(i) {
+            if c.is_alphanumeric() {
+                text.push(c);
+                i += 1;
             } else {
                 break;
             }
@@ -523,13 +556,18 @@ impl<'input> Tokenizer<'input> {
         self.input.next()
     }
 
+    pub fn skip(&mut self, n: usize) {
+        self.pos += n;
+        self.input.by_ref().take(n).for_each(drop);
+    }
+
     pub fn peek(&self) -> Option<char> {
         self.input.clone().next()
     }
 
-    // pub fn peek_nth(&mut self, n: usize) -> Option<char> {
-    //     self.input.chars().nth(n)
-    // }
+    pub fn peek_nth(&mut self, n: usize) -> Option<char> {
+        self.input.clone().nth(n)
+    }
 }
 
 #[cfg(test)]
@@ -579,12 +617,18 @@ mod tests {
             run("123"),
             vec![Token::Number("123".to_string())]
         );
+    }
 
+    #[test]
+    fn test_number_with_decimal() {
         assert_eq!(
             run("123.456"),
             vec![Token::Number("123.456".to_string())]
         );
+    }
 
+    #[test]
+    fn test_number_with_comma() {
         // This might be an error, but we don't assume a specific decimal separator at this stage, so well allow weird
         // numbers
         assert_eq!(
@@ -607,7 +651,10 @@ mod tests {
             run("-123"),
             vec![Token::UnaryNeg, Token::Number("123".to_string())]
         );
+    }
 
+    #[test]
+    fn test_prefix_minus_after_op() {
         assert_eq!(
             run("1 - -2"),
             vec![
@@ -617,7 +664,10 @@ mod tests {
                 Token::Number("2".to_string())
             ]
         );
+    }
 
+    #[test]
+    fn test_prefix_not() {
         assert_eq!(
             run("3 - ~4"),
             vec![
@@ -646,12 +696,18 @@ mod tests {
             run("123%"),
             vec![Token::Percent("123".to_string())]
         );
+    }
 
+    #[test]
+    fn test_weird_percent() {
         assert_eq!(
             run("1,23.456%"),
             vec![Token::Percent("1,23.456".to_string())]
         );
+    }
 
+    #[test]
+    fn test_percent_with_space_is_mod() {
         assert_eq!(
             run("123 %"),
             vec![
@@ -659,7 +715,10 @@ mod tests {
                 Token::OpMod
             ]
         );
+    }
 
+    #[test]
+    fn test_percent_at_end_of_expression() {
         assert_eq!(
             run("123%)"),
             vec![
@@ -667,7 +726,10 @@ mod tests {
                 Token::RParen
             ]
         );
+    }
 
+    #[test]
+    fn test_percent_implicit_mul() {
         assert_eq!(
             run("123%pi"),
             vec![
@@ -687,7 +749,10 @@ mod tests {
                 Token::Factorial
             ]
         );
+    }
 
+    #[test]
+    fn test_factorial_with_op() {
         assert_eq!(
             run("5!*3"),
             vec![
@@ -1161,6 +1226,32 @@ mod tests {
                 Token::OpMul,
                 Token::FunctionCall("sin".to_string()),
                 Token::Number("3".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_function_with_number_in_name() {
+        assert_eq!(
+            run("log210 + log2(10) + log2pi + pi*log2(10)"),
+            vec![
+                Token::FunctionCall("log2".to_string()),
+                Token::Number("10".to_string()),
+                Token::OpAdd,
+                Token::FunctionCall("log2".to_string()),
+                Token::LParen,
+                Token::Number("10".to_string()),
+                Token::RParen,
+                Token::OpAdd,
+                Token::FunctionCall("log2".to_string()),
+                Token::Number("pi".to_string()),
+                Token::OpAdd,
+                Token::Number("pi".to_string()),
+                Token::OpMul,
+                Token::FunctionCall("log2".to_string()),
+                Token::LParen,
+                Token::Number("10".to_string()),
+                Token::RParen
             ]
         );
     }

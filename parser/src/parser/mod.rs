@@ -571,6 +571,23 @@ mod tests {
                 Box::new(ast::Expr::Number("2".to_string()))
             )
         );
+
+        assert_eq!(
+            run("log2 256"), // Test function name with number
+            ast::Expr::FunctionCall("log2".to_string(), vec![
+                ast::Expr::Number("256".to_string())
+            ])
+        );
+
+        assert_eq!(
+            run("log 2 + 256"),
+            ast::Expr::Add(
+                Box::new(ast::Expr::FunctionCall("log".to_string(), vec![
+                    ast::Expr::Number("2".to_string())
+                ])),
+                Box::new(ast::Expr::Number("256".to_string()))
+            )
+        );
     }
 
     #[test]
