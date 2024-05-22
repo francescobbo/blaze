@@ -9,9 +9,10 @@ extern {
 
     enum tokenizer::Token {
         number => tokenizer::Token::Number(_),
-        // text => tokenizer::Token::Text(_),
+        text => tokenizer::Token::Text(_),
         percent => tokenizer::Token::Percent(_),
         functionCall => tokenizer::Token::FunctionCall(_),
+        currency => tokenizer::Token::CurrencySymbol(_),
         neg => tokenizer::Token::UnaryNeg,
         not => tokenizer::Token::UnaryNot,
         fact => tokenizer::Token::Factorial,
@@ -31,6 +32,7 @@ extern {
         OpShr => tokenizer::Token::OpShr,
         OpRol => tokenizer::Token::OpRol,
         OpRor => tokenizer::Token::OpRor,
+        OpOf => tokenizer::Token::OpOf,
     }
 }
 
@@ -43,9 +45,21 @@ pub Expr: Box<Expr> = {
     #[precedence(level="1")] #[assoc(side="right")]
     <l:Expr> OpPow <r:Expr> => Box::new(Expr::Power(l, r)),
     #[precedence(level="2")] #[assoc(side="right")]
+    <fc:functionCall> lparen rparen => {
+        match fc {
+            tokenizer::Token::FunctionCall(f) => Box::new(Expr::FunctionCall(f, vec![])),
+            _ => unreachable!()
+        }
+    },
     <fc:functionCall> <e:Expr> => {
         match fc {
             tokenizer::Token::FunctionCall(f) => Box::new(Expr::FunctionCall(f, vec![*e])),
+            _ => unreachable!()
+        }
+    },
+    <p:percent> OpOf <e:Expr> => {
+        match p {
+            tokenizer::Token::Percent(v) => Box::new(Expr::Multiply(Box::new(Expr::Percent(v)), e)),
             _ => unreachable!()
         }
     },
@@ -72,7 +86,35 @@ pub Expr: Box<Expr> = {
 Term: Box<Expr> = {
     <n:number> => {
         match n {
-            tokenizer::Token::Number(v) => Box::new(Expr::Number(v)),
+            tokenizer::Token::Number(v) => Box::new(Expr::Number(v, "".to_string())),
+            _ => unreachable!()
+        }
+    },
+    // <n:number> <u:Unit> => {
+    //     match n {
+    //         tokenizer::Token::Number(v) => Box::new(Expr::Number(v, u)),
+    //         _ => unreachable!()
+    //     }
+    // },
+    <c:currency> <n:number> => {
+        match n {
+            tokenizer::Token::Number(v) => {
+                match c {
+                    tokenizer::Token::CurrencySymbol(s) => Box::new(Expr::Number(v, s)),
+                    _ => unreachable!()
+                }
+            }
+            _ => unreachable!()
+        }
+    },
+    <n:number> <c:currency> => {
+        match n {
+            tokenizer::Token::Number(v) => {
+                match c {
+                    tokenizer::Token::CurrencySymbol(s) => Box::new(Expr::Number(v, s)),
+                    _ => unreachable!()
+                }
+            }
             _ => unreachable!()
         }
     },
@@ -84,3 +126,14 @@ Term: Box<Expr> = {
     },
     lparen <Expr> rparen
 };
+
+// Unit: String = {
+//     #[precedence(level="0")]
+//     text => text,
+//     #[precedence(level="1")] #[assoc(side="right")]
+//     text OpPow number => format!("{}^{}", text, number),
+//     text OpPow neg number => format!("{}^-{}", text, number),
+//     #[precedence(level="2")] #[assoc(side="left")]
+//     text OpMul text => format!("{}*{}", text, text),
+//     text OpDiv text => format!("{}/{}", text, text),
+// };

@@ -19,3 +19,17 @@ path = "fuzz_targets/tokenizer.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "parser"
+path = "fuzz_targets/parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "unit_tokenizer"
+path = "fuzz_targets/unit_tokenizer.rs"
+test = false
+doc = false
+bench = false

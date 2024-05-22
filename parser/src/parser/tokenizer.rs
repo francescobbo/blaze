@@ -10,11 +10,14 @@ pub struct Tokenizer<'input> {
     tokens: Vec<LalrpopToken>,
 
     buffer: String,
+    unit_buffer: String,
 
     // The tokenizer needs help recognizing known functions or constants
     // TODO: allow for custom functions
-    is_const: fn(&str) -> bool,
-    is_func: fn(&str) -> bool,
+    consts: Vec<&'static str>,
+    funcs: Vec<&'static str>,
+    is_currency_symbol: fn(&str) -> bool,
+    of_operator: fn(&str) -> bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -28,17 +31,27 @@ pub enum Token {
     Text(String),
     Percent(String),
     FunctionCall(String),
+    CurrencySymbol(String),
     UnaryNeg,
     UnaryNot,
     Factorial,
     LParen,
     RParen,
 
-    OpAdd, OpSub,
-    OpMul, OpDiv,
-    OpPow, OpMod,
-    OpOr, OpAnd, OpXor,
-    OpShl, OpShr, OpRol, OpRor,
+    OpAdd,
+    OpSub,
+    OpMul,
+    OpDiv,
+    OpPow,
+    OpMod,
+    OpOr,
+    OpAnd,
+    OpXor,
+    OpShl,
+    OpShr,
+    OpRol,
+    OpRor,
+    OpOf,
 
     Eof,
 }
@@ -53,41 +66,15 @@ enum State {
     BeforeOp,
     BeforeExprText,
     AfterNumberText,
+    InUnit,
+    InUnitAmbiguousOp,
+    InUnitAfterAmbiguousOp,
+    InUnitPower,
     Eof,
 }
 
-static mut FUNCTIONS: Vec<&'static str> = Vec::new();
-
 impl<'input> Tokenizer<'input> {
     pub fn new(input: &'input str) -> Self {
-        unsafe {
-            FUNCTIONS = vec![
-                "abs",
-                "acos",
-                "acosh",
-                "asin",
-                "asinh",
-                "atan",
-                "atanh",
-                "cbrt",
-                "ceil",
-                "cos",
-                "cosh",
-                "exp",
-                "floor",
-                "ln",
-                "log",
-                "log2",
-                "round",
-                "sin",
-                "sinh",
-                "sqrt",
-                "tan",
-                "tanh",
-                "trunc",
-            ];
-        }
-
         Tokenizer {
             input: input.chars(),
             pos: 0,
@@ -95,10 +82,17 @@ impl<'input> Tokenizer<'input> {
             tokens: Vec::new(),
 
             buffer: String::new(),
+            unit_buffer: String::new(),
 
             // Later we'll plug in the actual functions
-            is_const: |s| s == "pi" || s == "e",
-            is_func: |s| unsafe { FUNCTIONS.contains(&s) },
+            consts: vec!["pi", "e"],
+            funcs: vec![
+                "abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "cbrt", "ceil", "cos",
+                "cosh", "exp", "floor", "ln", "log", "log2", "rand", "round", "sin", "sinh", "sqrt", "tan",
+                "tanh", "trunc",
+            ],
+            is_currency_symbol: |s| vec!["$", "€", "£", "¥", "₹", "₽", "₿"].contains(&s),
+            of_operator: |s| s == "of",
         }
     }
 
@@ -125,33 +119,34 @@ impl<'input> Tokenizer<'input> {
                 match next {
                     Some(c) if c.is_digit(10) || c == '.' || c == ',' => {
                         self.state = State::Number;
-                    },
-                    Some(c) if c.is_alphabetic() => {
-                        self.state = State::BeforeExprText;
-                    },
+                    }
                     Some(c) if c == '-' => {
                         self.consume();
                         self.produce(Token::UnaryNeg)
-                    },
+                    }
                     Some(c) if c == '+' => {
                         self.consume(); // Ignore a prefix '+'
-                    },
+                    }
                     Some(c) if c == '~' => {
                         self.consume();
                         self.produce(Token::UnaryNot);
-                    },
+                    }
                     Some(c) if c == '(' => {
                         self.consume();
                         self.produce(Token::LParen)
-                    },
+                    }
+                    Some(c) if c == ')' => {
+                        self.consume();
+                        self.produce(Token::RParen);
+                        self.state = State::BeforeOp;
+                    }
                     Some(c) if c.is_whitespace() => {
                         self.consume(); // Ignore whitespace at the start
-                    },
-                    Some(c) => {
-                        self.produce_error(Error::UnexpectedCharacter(c));
-                        self.produce(Token::Eof);
-                    },
-                    None => self.produce(Token::Eof)
+                    }
+                    Some(_) => {
+                        self.state = State::BeforeExprText;
+                    }
+                    None => self.produce(Token::Eof),
                 }
             }
             State::Number => {
@@ -175,22 +170,32 @@ impl<'input> Tokenizer<'input> {
                         self.produce(Token::Number(self.buffer.clone()));
                         self.state = State::AfterNumberSpace;
                         self.consume();
-                    },
+                    }
                     Some(c) if c == '%' => {
                         self.consume();
                         self.state = State::AmbiguousPercent;
-                    },
+                    }
                     Some(c) if c == '!' => {
                         self.produce(Token::Number(self.buffer.clone()));
                         self.consume();
                         self.produce(Token::Factorial);
 
                         self.state = State::BeforeOp;
-                    },
-                    Some(c) if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '&' || c == '|' || c == '<' || c == '>' => {
+                    }
+                    Some(c)
+                        if c == '+'
+                            || c == '-'
+                            || c == '*'
+                            || c == '/'
+                            || c == '^'
+                            || c == '&'
+                            || c == '|'
+                            || c == '<'
+                            || c == '>' =>
+                    {
                         self.produce(Token::Number(self.buffer.clone()));
                         self.state = State::BeforeOp;
-                    },
+                    }
                     Some(c) if c == '(' => {
                         // This is an implicit multiplication (e.g. 2(3+4)), so insert a multiplication operator
                         self.consume();
@@ -199,24 +204,18 @@ impl<'input> Tokenizer<'input> {
                         self.produce(Token::LParen);
 
                         self.state = State::BeforeExpr;
-                    },
+                    }
                     Some(c) if c == ')' => {
                         self.produce(Token::Number(self.buffer.clone()));
                         self.consume();
                         self.produce(Token::RParen);
 
                         self.state = State::BeforeOp;
-                    },
-                    Some(c) if c.is_alphabetic() => {
+                    }
+                    Some(_) => {
                         self.produce(Token::Number(self.buffer.clone()));
                         self.state = State::AfterNumberText;
-                    },
-                    Some(c) => {
-                        self.produce(Token::Number(self.buffer.clone()));
-                        self.produce_error(Error::UnexpectedCharacter(c));
-
-                        self.produce(Token::Eof);
-                    },
+                    }
                     None => {
                         self.produce(Token::Number(self.buffer.clone()));
                         self.produce(Token::Eof)
@@ -229,9 +228,20 @@ impl<'input> Tokenizer<'input> {
                 let next = self.peek();
 
                 match next {
-                    Some(c) if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '%' || c == '&' || c == '|' || c == '<' || c == '>' => {
+                    Some(c)
+                        if c == '+'
+                            || c == '-'
+                            || c == '*'
+                            || c == '/'
+                            || c == '^'
+                            || c == '%'
+                            || c == '&'
+                            || c == '|'
+                            || c == '<'
+                            || c == '>' =>
+                    {
                         self.state = State::BeforeOp;
-                    },
+                    }
                     Some(c) if c == '(' => {
                         // This is an implicit multiplication (e.g. 2 (3+4)), so insert a multiplication operator
                         // However, it's kind of weird to have a space before an opening parenthesis, so we'll also produce an error
@@ -240,26 +250,22 @@ impl<'input> Tokenizer<'input> {
                         self.produce(Token::LParen);
                         self.produce_error(Error::UnexpectedCharacter(c));
                         self.state = State::BeforeExpr;
-                    },
+                    }
                     Some(c) if c == ')' => {
                         self.consume();
                         self.produce(Token::RParen);
-                    },
-                    Some(c) if c.is_alphabetic() => {
-                        self.state = State::AfterNumberText;
-                    },
+                    }
                     Some(c) if c.is_whitespace() => {
                         self.consume();
-                    },
+                    }
                     Some(c) if c.is_digit(10) => {
                         // A number following a number is never valid, so this is a critical error
                         self.produce_error(Error::UnexpectedCharacter(c));
                         self.produce(Token::Eof);
-                    },
-                    Some(c) => {
-                        self.produce_error(Error::UnexpectedCharacter(c));
-                        self.produce(Token::Eof);
-                    },
+                    }
+                    Some(_) => {
+                        self.state = State::AfterNumberText;
+                    }
                     None => {
                         self.produce(Token::Eof);
                     }
@@ -277,20 +283,27 @@ impl<'input> Tokenizer<'input> {
                 let next = self.peek();
 
                 match next {
-                    Some(c) if c == '+' || c == '-' || c == '*' || c == '/' || c == '^' || c == '%' || c == '&' || c == '|' || c == '<' || c == '>' => {
+                    Some(c)
+                        if c == '+'
+                            || c == '-'
+                            || c == '*'
+                            || c == '/'
+                            || c == '^'
+                            || c == '%'
+                            || c == '&'
+                            || c == '|'
+                            || c == '<'
+                            || c == '>' =>
+                    {
                         self.produce(Token::Percent(self.buffer.clone()));
                         self.state = State::BeforeOp;
-                    },
-                    Some(c) if c.is_alphabetic() => {
-                        self.produce(Token::Percent(self.buffer.clone()));
-                        self.state = State::AfterNumberText;
-                    },
+                    }
                     Some(c) if c == ')' => {
                         self.consume();
                         self.produce(Token::Percent(self.buffer.clone()));
                         self.produce(Token::RParen);
                         self.state = State::BeforeOp;
-                    },
+                    }
                     Some(c) if c == '(' => {
                         self.consume();
 
@@ -299,15 +312,14 @@ impl<'input> Tokenizer<'input> {
                         self.produce(Token::LParen);
 
                         self.state = State::BeforeExpr;
-                    },
+                    }
                     Some(c) if c.is_whitespace() => {
                         self.consume();
-                    },
-                    Some(c) => {
+                    }
+                    Some(_) => {
                         self.produce(Token::Percent(self.buffer.clone()));
-                        self.produce_error(Error::UnexpectedCharacter(c));
-                        self.produce(Token::Eof);
-                    },
+                        self.state = State::AfterNumberText;
+                    }
                     None => {
                         self.produce(Token::Percent(self.buffer.clone()));
                         self.produce(Token::Eof);
@@ -322,12 +334,12 @@ impl<'input> Tokenizer<'input> {
                         self.consume();
                         self.produce(Token::OpAdd);
                         self.state = State::BeforeExpr;
-                    },
+                    }
                     Some(c) if c == '-' => {
                         self.consume();
                         self.produce(Token::OpSub);
                         self.state = State::BeforeExpr;
-                    },
+                    }
                     Some(c) if c == '*' => {
                         self.consume();
 
@@ -338,17 +350,17 @@ impl<'input> Tokenizer<'input> {
                             self.produce(Token::OpMul);
                         }
                         self.state = State::BeforeExpr;
-                    },
+                    }
                     Some(c) if c == '/' => {
                         self.consume();
                         self.produce(Token::OpDiv);
                         self.state = State::BeforeExpr;
-                    },
+                    }
                     Some(c) if c == '^' => {
                         self.consume();
                         self.produce(Token::OpPow);
                         self.state = State::BeforeExpr;
-                    },
+                    }
                     Some(c) if c == '%' => {
                         self.consume();
                         self.produce(Token::OpMod);
@@ -389,14 +401,21 @@ impl<'input> Tokenizer<'input> {
                     Some(c) if c == ')' => {
                         self.consume();
                         self.produce(Token::RParen);
-                    },
+                    }
                     Some(c) if c.is_whitespace() => {
                         self.consume();
-                    },
-                    Some(c) => {
-                        self.produce_error(Error::UnexpectedCharacter(c));
-                        self.produce(Token::Eof);
-                    },
+                    }
+                    Some(_) => {
+                        let word = self.read_word();
+
+                        if word.len() > 0 {
+                            self.skip(word.chars().count());
+                            self.produce(Token::Text(word));
+                        } else {
+                            self.produce_error(Error::UnexpectedCharacter(self.peek().unwrap()));
+                            self.produce(Token::Eof);
+                        }
+                    }
                     None => {
                         self.produce(Token::Eof);
                     }
@@ -406,18 +425,23 @@ impl<'input> Tokenizer<'input> {
                 // If an expression starts with a word, it can only be a function or a constant
 
                 self.buffer = self.read_word();
-                
-                if (self.is_const)(&self.buffer) {
+
+                if self.consts.contains(&self.buffer.as_str()) {
                     // A constant is a number in disguise
                     self.state = State::AfterNumber;
-                    self.skip(self.buffer.len());
+                    self.skip(self.buffer.chars().count());
                 } else {
                     // Some functions have numbers in their names. We'll greedily match the longest function name
                     // against the buffer which contains "[a-z][a-z0-9]*"
                     while self.buffer.len() > 0 {
-                        if (self.is_func)(&self.buffer) {
-                            self.skip(self.buffer.len());
+                        if self.funcs.contains(&self.buffer.as_str()) {
+                            self.skip(self.buffer.chars().count());
                             self.produce(Token::FunctionCall(self.buffer.clone()));
+                            self.state = State::BeforeExpr;
+                            break;
+                        } else if (self.is_currency_symbol)(&self.buffer) {
+                            self.skip(self.buffer.chars().count());
+                            self.produce(Token::CurrencySymbol(self.buffer.clone()));
                             self.state = State::BeforeExpr;
                             break;
                         }
@@ -426,9 +450,21 @@ impl<'input> Tokenizer<'input> {
                     }
 
                     if self.buffer.len() == 0 {
-                        // We didn't find a function, so it must be arbitrary text at the beginning of the expression
-                        self.produce_error(Error::UnexpectedCharacter(self.peek().unwrap()));
-                        self.produce(Token::Eof);
+                        // We didn't find a function, so it must be arbitrary text (a unit, a variable, etc.)
+                        // re-read the buffer and produce a text token
+                        let word = self.read_word();
+
+                        if word.len() > 0 {
+                            self.skip(word.chars().count());
+                            self.produce(Token::Text(word));
+
+                            // After a unit or a variable, we expect an operator
+                            self.state = State::BeforeOp;
+                        } else {
+                            // This is text with non-alphanumeric characters
+                            self.produce_error(Error::UnexpectedCharacter(self.peek().unwrap()));
+                            self.produce(Token::Eof);
+                        }
                     }
                 }
             }
@@ -439,57 +475,137 @@ impl<'input> Tokenizer<'input> {
                 // - a unit (e.g. 3 m/s)
 
                 self.buffer = self.read_word();
-                
-                if (self.is_const)(&self.buffer) {
+
+                if self.consts.contains(&self.buffer.as_str()) {
                     // A constant is a number in disguise
-                    self.skip(self.buffer.len());
+                    self.skip(self.buffer.chars().count());
                     self.produce(Token::OpMul);
                     self.produce(Token::Number(self.buffer.clone()));
                     self.state = State::BeforeOp;
                 } else {
-                    // Check the first 3 characters to see if it's a textual operator
-                    let mut op: Option<Token> = None;
-                    if self.buffer.len() >= 3 {
-                        if self.buffer.starts_with("mod") {
-                            op = Some(Token::OpMod);
-                        } else if self.buffer.starts_with("xor") {
-                            op = Some(Token::OpXor);
-                        } else if self.buffer.starts_with("rol") {
-                            op = Some(Token::OpRol);
-                        } else if self.buffer.starts_with("ror") {
-                            op = Some(Token::OpRor);
+                    while self.buffer.len() > 0 {
+                        if self.buffer == "mod" {
+                            self.skip(3);
+                            self.produce(Token::OpMod);
+                            self.state = State::BeforeExpr;
+                            break;
+                        } else if self.buffer == "xor" {
+                            self.skip(3);
+                            self.produce(Token::OpXor);
+                            self.state = State::BeforeExpr;
+                            break;
+                        } else if self.buffer == "rol" {
+                            self.skip(3);
+                            self.produce(Token::OpRol);
+                            self.state = State::BeforeExpr;
+                            break;
+                        } else if self.buffer == "ror" {
+                            self.skip(3);
+                            self.produce(Token::OpRor);
+                            self.state = State::BeforeExpr;
+                            break;
+                        } else if self.funcs.contains(&self.buffer.as_str()) {
+                            self.skip(self.buffer.chars().count());
+                            self.produce(Token::OpMul);
+                            self.produce(Token::FunctionCall(self.buffer.clone()));
+                            self.state = State::BeforeExpr;
+                            break;
+                        } else if (self.of_operator)(&self.buffer) {
+                            self.skip(self.buffer.chars().count());
+                            self.produce(Token::OpOf);
+                            self.state = State::BeforeExpr;
+                            break;
+                        } else if (self.is_currency_symbol)(&self.buffer) {
+                            self.skip(self.buffer.chars().count());
+                            self.produce(Token::CurrencySymbol(self.buffer.clone()));
+                            self.state = State::AfterNumberSpace;
+                            break;
                         }
+                        
+                        self.buffer.pop();
                     }
 
-                    if op.is_none() {
-                        // It wasn't a textual operator, let's try matching function names
-                        while self.buffer.len() > 0 {
-                            if (self.is_func)(&self.buffer) {
-                                self.skip(self.buffer.len());
-                                self.produce(Token::OpMul);
-                                self.produce(Token::FunctionCall(self.buffer.clone()));
-                                self.state = State::BeforeExpr;
-                                break;
-                            }
+                    if self.buffer.len() == 0 {
+                        // We didn't find a function, so it must be an unit or a variable
+                        
+                        let word = self.read_word();
+                        if word.len() > 0 {
+                            self.skip(word.chars().count());
+                            self.produce(Token::Text(word));
 
-                            self.buffer.pop();
-                        }
-
-                        if self.buffer.len() == 0 {
-                            // We didn't find a function, so it must be an unit (TODO)
+                            // After a unit or a variable, we expect an operator
+                            self.state = State::BeforeOp;
+                        } else {
+                            // This is text with non-alphanumeric characters
                             self.produce_error(Error::UnexpectedCharacter(self.peek().unwrap()));
                             self.produce(Token::Eof);
                         }
-                    } else {
-                        self.skip(3);
-                        self.produce(op.unwrap());
-                        self.state = State::BeforeExpr;
                     }
                 }
-            },
+            }
+            State::InUnit => {
+                match self.peek() {
+                    Some(c) if c.is_alphanumeric() => {
+                        let ch = self.consume().unwrap();
+                        self.buffer.push(ch);
+                    }
+                    Some(c) if c.is_whitespace() => {
+                        self.consume(); // Ignore whitespace
+                    }
+                    Some(c) if c == '*' || c == '/' => {
+                        self.state = State::InUnitAmbiguousOp;
+                    }
+                    Some('^') => {
+                        self.consume();
+                        self.buffer.push('^');
+                        self.state = State::InUnitPower;
+                    }
+                    Some(_) => {
+                        self.produce(Token::Text(self.buffer.clone()));
+                        self.state = State::BeforeOp;
+                    }
+                    None => {
+                        self.produce(Token::Text(self.buffer.clone()));
+                        self.produce(Token::Eof);
+                    }
+                }
+            }
+            State::InUnitAmbiguousOp => {
+                let next = self.consume().unwrap();
+
+                // match next {
+                //     Some('*') => {
+                //         self.unit_buffer.push(self.consume().unwrap());
+                //     }
+                //     Some('/') => {
+                //         self.unit_buffer.push(self.consume().unwrap());
+                //         self.produce(Token::Text(self.unit_buffer.clone()));
+                //         self.state = State::BeforeOp;
+                //     }
+                //     Some(_) | None => unreachable!(),
+                // }
+            }
+            State::InUnitPower => {
+                let next = self.peek();
+
+                match next {
+                    Some(c) if c.is_digit(10) || c == '.' || c == ',' || c == '-' => {
+                        let ch = self.consume().unwrap();
+                        self.buffer.push(ch);
+                    }
+                    Some(c) if c.is_whitespace() => {
+                        self.consume(); // Ignore whitespace
+                    }
+                    _ => {
+                        self.produce(Token::Text(self.buffer.clone()));
+                        self.state = State::InUnit;
+                    }
+                }
+            }
             State::Eof => {
                 // Do nothing
             }
+            _ => panic!("Unexpected state: {:?}", self.state),
         }
     }
 
@@ -498,21 +614,21 @@ impl<'input> Tokenizer<'input> {
             self.state = State::Eof;
         }
 
-
         let end = self.pos;
         let size = match token {
             Token::Number(ref s) => s.len(),
             Token::Text(ref s) => s.len(),
             Token::Percent(ref s) => s.len() + 1,
             Token::FunctionCall(ref s) => s.len(),
+            Token::CurrencySymbol(ref s) => s.len(),
             Token::OpShl | Token::OpShr => 2,
             Token::OpXor | Token::OpRol | Token::OpRor => 3,
             Token::Eof => 0,
-            _ => 1
+            _ => 1,
         };
 
         let start = end - size;
-        
+
         self.tokens.push(Ok((start, token, end)));
     }
 
@@ -540,7 +656,7 @@ impl<'input> Tokenizer<'input> {
 
         let mut i = 0;
         while let Some(c) = self.peek_nth(i) {
-            if c.is_alphanumeric() {
+            if (!c.is_whitespace() && !c.is_ascii_punctuation()) || c == '$' {
                 text.push(c);
                 i += 1;
             } else {
@@ -613,18 +729,12 @@ mod tests {
 
     #[test]
     fn test_number() {
-        assert_eq!(
-            run("123"),
-            vec![Token::Number("123".to_string())]
-        );
+        assert_eq!(run("123"), vec![Token::Number("123".to_string())]);
     }
 
     #[test]
     fn test_number_with_decimal() {
-        assert_eq!(
-            run("123.456"),
-            vec![Token::Number("123.456".to_string())]
-        );
+        assert_eq!(run("123.456"), vec![Token::Number("123.456".to_string())]);
     }
 
     #[test]
@@ -639,10 +749,7 @@ mod tests {
 
     #[test]
     fn test_prefix_plus() {
-        assert_eq!(
-            run("+123"),
-            vec![Token::Number("123".to_string())]
-        );
+        assert_eq!(run("+123"), vec![Token::Number("123".to_string())]);
     }
 
     #[test]
@@ -692,10 +799,7 @@ mod tests {
 
     #[test]
     fn test_percent() {
-        assert_eq!(
-            run("123%"),
-            vec![Token::Percent("123".to_string())]
-        );
+        assert_eq!(run("123%"), vec![Token::Percent("123".to_string())]);
     }
 
     #[test]
@@ -710,10 +814,7 @@ mod tests {
     fn test_percent_with_space_is_mod() {
         assert_eq!(
             run("123 %"),
-            vec![
-                Token::Number("123".to_string()),
-                Token::OpMod
-            ]
+            vec![Token::Number("123".to_string()), Token::OpMod]
         );
     }
 
@@ -721,10 +822,7 @@ mod tests {
     fn test_percent_at_end_of_expression() {
         assert_eq!(
             run("123%)"),
-            vec![
-                Token::Percent("123".to_string()),
-                Token::RParen
-            ]
+            vec![Token::Percent("123".to_string()), Token::RParen]
         );
     }
 
@@ -741,13 +839,22 @@ mod tests {
     }
 
     #[test]
+    fn test_percent_of() {
+        assert_eq!(
+            run("123% of 100"),
+            vec![
+                Token::Percent("123".to_string()),
+                Token::OpOf,
+                Token::Number("100".to_string())
+            ]
+        );
+    }
+
+    #[test]
     fn test_factorial() {
         assert_eq!(
             run("5!"),
-            vec![
-                Token::Number("5".to_string()),
-                Token::Factorial
-            ]
+            vec![Token::Number("5".to_string()), Token::Factorial]
         );
     }
 
@@ -1020,7 +1127,7 @@ mod tests {
                 Token::Number("2".to_string())
             ]
         );
-        
+
         assert_eq!(
             run("(3 + 2   )"),
             vec![
@@ -1035,15 +1142,9 @@ mod tests {
 
     #[test]
     fn test_words_at_beginning() {
-        assert_eq!(
-            run("pi"),
-            vec![Token::Number("pi".to_string())]
-        );
+        assert_eq!(run("pi"), vec![Token::Number("pi".to_string())]);
 
-        assert_eq!(
-            run("e"),
-            vec![Token::Number("e".to_string())]
-        );
+        assert_eq!(run("e"), vec![Token::Number("e".to_string())]);
 
         assert_eq!(
             run("sin(3)"),
@@ -1375,17 +1476,218 @@ mod tests {
                 Token::RParen,
                 Token::RParen
             ]
-        )
+        );
+
+        assert_eq!(
+            run("rand() + 2"),
+            vec![
+                Token::FunctionCall("rand".to_string()),
+                Token::LParen,
+                Token::RParen,
+                Token::OpAdd,
+                Token::Number("2".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_currency_symbol() {
+        assert_eq!(
+            run("$10"),
+            vec![Token::CurrencySymbol("$".to_string()), Token::Number("10".to_string())]
+        );
+
+        assert_eq!(
+            run("10$ + 20€"),
+            vec![
+                Token::Number("10".to_string()),
+                Token::CurrencySymbol("$".to_string()),
+                Token::OpAdd,
+                Token::Number("20".to_string()),
+                Token::CurrencySymbol("€".to_string())
+            ]
+        );
+
+        assert_eq!(
+            run("10 $ + € 20 + 30£"),
+            vec![
+                Token::Number("10".to_string()),
+                Token::CurrencySymbol("$".to_string()),
+                Token::OpAdd,
+                Token::CurrencySymbol("€".to_string()),
+                Token::Number("20".to_string()),
+                Token::OpAdd,
+                Token::Number("30".to_string()),
+                Token::CurrencySymbol("£".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unit_single_letter() {
+        assert_eq!(
+            run("3m"),
+            vec![Token::Number("3".to_string()), Token::Text("m".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_unit_multiple_letters() {
+        assert_eq!(
+            run("3kg"),
+            vec![Token::Number("3".to_string()), Token::Text("kg".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_unit_with_space() {
+        assert_eq!(
+            run("3 kg"),
+            vec![Token::Number("3".to_string()), Token::Text("kg".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_unit_with_implicit_pow() {
+        assert_eq!(
+            run("3m2"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::Text("m2".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unit_with_explicit_pow() {
+        assert_eq!(
+            run("3m^2"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::Text("m".to_string()),
+                Token::OpPow,
+                Token::Number("2".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unit_with_explicit_pow_and_space() {
+        assert_eq!(
+            run("3 m ^ 2"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::Text("m".to_string()),
+                Token::OpPow,
+                Token::Number("2".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unit_with_explicit_pow_and_space_and_op() {
+        assert_eq!(
+            run("3 m ^ 2 + 4"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::Text("m".to_string()),
+                Token::OpPow,
+                Token::Number("2".to_string()),
+                Token::OpAdd,
+                Token::Number("4".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_multiplied_unit() {
+        assert_eq!(
+            run("3m*s"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::Text("m".to_string()),
+                Token::OpMul,
+                Token::Text("s".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_divided_unit() {
+        assert_eq!(
+            run("3m/s"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::Text("m".to_string()),
+                Token::OpDiv,
+                Token::Text("s".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unit_with_division_implicit_pow() {
+        assert_eq!(
+            run("3m/s2"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::Text("m".to_string()),
+                Token::OpDiv,
+                Token::Text("s2".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unit_with_division_explicit_pow() {
+        assert_eq!(
+            run("3m/s^2"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::Text("m".to_string()),
+                Token::OpDiv,
+                Token::Text("s".to_string()),
+                Token::OpPow,
+                Token::Number("2".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_unit_with_division_expression() {
+        assert_eq!(
+            run("3m/(kg*s)"),
+            vec![
+                Token::Number("3".to_string()),
+                Token::Text("m".to_string()),
+                Token::OpDiv,
+                Token::LParen,
+                Token::Text("kg".to_string()),
+                Token::OpMul,
+                Token::Text("s".to_string()),
+                Token::RParen,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_currency_and_divided_unit() {
+        assert_eq!(
+            run("$3/kg"),
+            vec![
+                Token::CurrencySymbol("$".to_string()),
+                Token::Number("3".to_string()),
+                Token::OpDiv,
+                Token::Text("kg".to_string()),
+            ]
+        );
     }
 
     #[test]
     fn test_easy_failures() {
         assert_eq!(
             run_fallible("@"),
-            (
-                vec![],
-                vec![Error::UnexpectedCharacter('@')]
-            )
+            (vec![], vec![Error::UnexpectedCharacter('@')])
         );
 
         assert_eq!(
@@ -1399,9 +1701,7 @@ mod tests {
         assert_eq!(
             run_fallible("1 @"),
             (
-                vec![
-                    Token::Number("1".to_string()),
-                ],
+                vec![Token::Number("1".to_string()),],
                 vec![Error::UnexpectedCharacter('@')]
             )
         );
@@ -1409,9 +1709,7 @@ mod tests {
         assert_eq!(
             run_fallible("3%@"),
             (
-                vec![
-                    Token::Percent("3".to_string()),
-                ],
+                vec![Token::Percent("3".to_string()),],
                 vec![Error::UnexpectedCharacter('@')]
             )
         );
@@ -1419,34 +1717,28 @@ mod tests {
         assert_eq!(
             run_fallible("3 % @"),
             (
-                vec![
-                    Token::Number("3".to_string()),
-                    Token::OpMod,
-                ],
+                vec![Token::Number("3".to_string()), Token::OpMod,],
                 vec![Error::UnexpectedCharacter('@')]
             )
         );
 
         assert_eq!(
-            run_fallible("hello"),
-            (
-                vec![],
-                vec![Error::UnexpectedCharacter('h')]
-            )
+            run("hello"),
+            vec![
+                Token::Text("hello".to_string()),
+            ]
         );
 
         assert_eq!(
-            run_fallible("(3 + 2) hello"),
-            (
-                vec![
-                    Token::LParen,
-                    Token::Number("3".to_string()),
-                    Token::OpAdd,
-                    Token::Number("2".to_string()),
-                    Token::RParen
-                ],
-                vec![Error::UnexpectedCharacter('h')]
-            )
+            run("(3 + 2) hello"),
+            vec![
+                Token::LParen,
+                Token::Number("3".to_string()),
+                Token::OpAdd,
+                Token::Number("2".to_string()),
+                Token::RParen,
+                Token::Text("hello".to_string()),
+            ],
         );
     }
 }
