@@ -8,11 +8,11 @@ extern {
     type Error = tokenizer::Error;
 
     enum tokenizer::Token {
-        number => tokenizer::Token::Number(_),
-        text => tokenizer::Token::Text(_),
-        percent => tokenizer::Token::Percent(_),
-        functionCall => tokenizer::Token::FunctionCall(_),
-        currency => tokenizer::Token::CurrencySymbol(_),
+        number => tokenizer::Token::Number(<String>),
+        unit => tokenizer::Token::Unit(<String>),
+        percent => tokenizer::Token::Percent(<String>),
+        functionCall => tokenizer::Token::FunctionCall(<String>),
+        currency => tokenizer::Token::PrefixCurrency(<String>),
         neg => tokenizer::Token::UnaryNeg,
         not => tokenizer::Token::UnaryNot,
         fact => tokenizer::Token::Factorial,
@@ -45,24 +45,9 @@ pub Expr: Box<Expr> = {
     #[precedence(level="1")] #[assoc(side="right")]
     <l:Expr> OpPow <r:Expr> => Box::new(Expr::Power(l, r)),
     #[precedence(level="2")] #[assoc(side="right")]
-    <fc:functionCall> lparen rparen => {
-        match fc {
-            tokenizer::Token::FunctionCall(f) => Box::new(Expr::FunctionCall(f, vec![])),
-            _ => unreachable!()
-        }
-    },
-    <fc:functionCall> <e:Expr> => {
-        match fc {
-            tokenizer::Token::FunctionCall(f) => Box::new(Expr::FunctionCall(f, vec![*e])),
-            _ => unreachable!()
-        }
-    },
-    <p:percent> OpOf <e:Expr> => {
-        match p {
-            tokenizer::Token::Percent(v) => Box::new(Expr::Multiply(Box::new(Expr::Percent(v)), e)),
-            _ => unreachable!()
-        }
-    },
+    <fc:functionCall> lparen rparen => Box::new(Expr::FunctionCall(fc, vec![])),
+    <fc:functionCall> <e:Expr> => Box::new(Expr::FunctionCall(fc, vec![*e])),
+    <p:percent> OpOf <e:Expr> => Box::new(Expr::Multiply(Box::new(Expr::Percent(p)), e)),
     #[precedence(level="3")] #[assoc(side="left")]
     <l:Expr> OpMul <r:Expr> => Box::new(Expr::Multiply(l, r)),
     <l:Expr> OpDiv <r:Expr> => Box::new(Expr::Divide(l, r)),
@@ -84,56 +69,20 @@ pub Expr: Box<Expr> = {
 };
 
 Term: Box<Expr> = {
-    <n:number> => {
-        match n {
-            tokenizer::Token::Number(v) => Box::new(Expr::Number(v, "".to_string())),
-            _ => unreachable!()
+    <t:Primary> <u:unit> => Box::new(Expr::WithUnit(t, u)),
+    <c:currency> <t:Primary> <u:unit?> => {
+        if let Some(u) = u {
+            Box::new(Expr::WithUnit(t, c + "*" + &u))
+        } else {
+            Box::new(Expr::WithUnit(t, c))
         }
     },
-    // <n:number> <u:Unit> => {
-    //     match n {
-    //         tokenizer::Token::Number(v) => Box::new(Expr::Number(v, u)),
-    //         _ => unreachable!()
-    //     }
-    // },
-    <c:currency> <n:number> => {
-        match n {
-            tokenizer::Token::Number(v) => {
-                match c {
-                    tokenizer::Token::CurrencySymbol(s) => Box::new(Expr::Number(v, s)),
-                    _ => unreachable!()
-                }
-            }
-            _ => unreachable!()
-        }
-    },
-    <n:number> <c:currency> => {
-        match n {
-            tokenizer::Token::Number(v) => {
-                match c {
-                    tokenizer::Token::CurrencySymbol(s) => Box::new(Expr::Number(v, s)),
-                    _ => unreachable!()
-                }
-            }
-            _ => unreachable!()
-        }
-    },
-    <p:percent> => {
-        match p {
-            tokenizer::Token::Percent(v) => Box::new(Expr::Percent(v)),
-            _ => unreachable!()
-        }
-    },
-    lparen <Expr> rparen
+
+    Primary
 };
 
-// Unit: String = {
-//     #[precedence(level="0")]
-//     text => text,
-//     #[precedence(level="1")] #[assoc(side="right")]
-//     text OpPow number => format!("{}^{}", text, number),
-//     text OpPow neg number => format!("{}^-{}", text, number),
-//     #[precedence(level="2")] #[assoc(side="left")]
-//     text OpMul text => format!("{}*{}", text, text),
-//     text OpDiv text => format!("{}/{}", text, text),
-// };
+Primary: Box<Expr> = {
+    <n:number> => Box::new(Expr::Number(n, "".to_string())),
+    <p:percent> => Box::new(Expr::Percent(p)),
+    lparen <Expr> rparen
+};

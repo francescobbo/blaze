@@ -26,22 +26,40 @@ mod tests {
 
     #[test]
     fn test_number() {
-        assert_eq!(run("123"), ast::Expr::Number("123".to_string(), "".to_string()));
+        assert_eq!(
+            run("123"),
+            ast::Expr::Number("123".to_string(), "".to_string())
+        );
 
-        assert_eq!(run("123.456"), ast::Expr::Number("123.456".to_string(), "".to_string()));
+        assert_eq!(
+            run("123.456"),
+            ast::Expr::Number("123.456".to_string(), "".to_string())
+        );
 
-        assert_eq!(run("123,45,.6"), ast::Expr::Number("123,45,.6".to_string(), "".to_string()));
+        assert_eq!(
+            run("123,45,.6"),
+            ast::Expr::Number("123,45,.6".to_string(), "".to_string())
+        );
 
-        assert_eq!(run("+123"), ast::Expr::Number("123".to_string(), "".to_string()));
+        assert_eq!(
+            run("+123"),
+            ast::Expr::Number("123".to_string(), "".to_string())
+        );
 
         assert_eq!(
             run("-123"),
-            ast::Expr::UnaryNegation(Box::new(ast::Expr::Number("123".to_string(), "".to_string())))
+            ast::Expr::UnaryNegation(Box::new(ast::Expr::Number(
+                "123".to_string(),
+                "".to_string()
+            )))
         );
 
         assert_eq!(
             run("~123"),
-            ast::Expr::UnaryNot(Box::new(ast::Expr::Number("123".to_string(), "".to_string())))
+            ast::Expr::UnaryNot(Box::new(ast::Expr::Number(
+                "123".to_string(),
+                "".to_string()
+            )))
         );
 
         assert_eq!(
@@ -49,8 +67,9 @@ mod tests {
             ast::Expr::Subtract(
                 Box::new(ast::Expr::Number("1".to_string(), "".to_string())),
                 Box::new(ast::Expr::UnaryNegation(Box::new(ast::Expr::Number(
-                    "2".to_string()
- , "".to_string()               ))))
+                    "2".to_string(),
+                    "".to_string()
+                ))))
             )
         );
 
@@ -59,8 +78,9 @@ mod tests {
             ast::Expr::Subtract(
                 Box::new(ast::Expr::Number("3".to_string(), "".to_string())),
                 Box::new(ast::Expr::UnaryNot(Box::new(ast::Expr::Number(
-                    "4".to_string()
- , "".to_string()               ))))
+                    "4".to_string(),
+                    "".to_string()
+                ))))
             )
         );
     }
@@ -112,8 +132,9 @@ mod tests {
             run("5!*3"),
             ast::Expr::Multiply(
                 Box::new(ast::Expr::UnaryFactorial(Box::new(ast::Expr::Number(
-                    "5".to_string()
- , "".to_string()               )))),
+                    "5".to_string(),
+                    "".to_string()
+                )))),
                 Box::new(ast::Expr::Number("3".to_string(), "".to_string()))
             )
         )
@@ -214,8 +235,9 @@ mod tests {
             run("-3 + 4"),
             ast::Expr::Add(
                 Box::new(ast::Expr::UnaryNegation(Box::new(ast::Expr::Number(
-                    "3".to_string()
- , "".to_string()               )))),
+                    "3".to_string(),
+                    "".to_string()
+                )))),
                 Box::new(ast::Expr::Number("4".to_string(), "".to_string()))
             )
         );
@@ -377,38 +399,59 @@ mod tests {
 
     #[test]
     fn test_constants_and_functions() {
-        assert_eq!(run("pi"), ast::Expr::Number("pi".to_string(), "".to_string()));
+        assert_eq!(
+            run("pi"),
+            ast::Expr::Number("pi".to_string(), "".to_string())
+        );
 
         assert_eq!(run("e"), ast::Expr::Number("e".to_string(), "".to_string()));
 
         assert_eq!(
             run("sin(3)"),
-            ast::Expr::FunctionCall("sin".to_string(), vec![ast::Expr::Number("3".to_string(), "".to_string())])
+            ast::Expr::FunctionCall(
+                "sin".to_string(),
+                vec![ast::Expr::Number("3".to_string(), "".to_string())]
+            )
         );
 
         assert_eq!(
             run("cos(3)"),
-            ast::Expr::FunctionCall("cos".to_string(), vec![ast::Expr::Number("3".to_string(), "".to_string())])
+            ast::Expr::FunctionCall(
+                "cos".to_string(),
+                vec![ast::Expr::Number("3".to_string(), "".to_string())]
+            )
         );
 
         assert_eq!(
             run("tan3"),
-            ast::Expr::FunctionCall("tan".to_string(), vec![ast::Expr::Number("3".to_string(), "".to_string())])
+            ast::Expr::FunctionCall(
+                "tan".to_string(),
+                vec![ast::Expr::Number("3".to_string(), "".to_string())]
+            )
         );
 
         assert_eq!(
             run("tan 3"),
-            ast::Expr::FunctionCall("tan".to_string(), vec![ast::Expr::Number("3".to_string(), "".to_string())])
+            ast::Expr::FunctionCall(
+                "tan".to_string(),
+                vec![ast::Expr::Number("3".to_string(), "".to_string())]
+            )
         );
 
         assert_eq!(
             run("log(3)"),
-            ast::Expr::FunctionCall("log".to_string(), vec![ast::Expr::Number("3".to_string(), "".to_string())])
+            ast::Expr::FunctionCall(
+                "log".to_string(),
+                vec![ast::Expr::Number("3".to_string(), "".to_string())]
+            )
         );
 
         assert_eq!(
             run("ln(3)"),
-            ast::Expr::FunctionCall("ln".to_string(), vec![ast::Expr::Number("3".to_string(), "".to_string())])
+            ast::Expr::FunctionCall(
+                "ln".to_string(),
+                vec![ast::Expr::Number("3".to_string(), "".to_string())]
+            )
         );
 
         assert_eq!(

@@ -1,5 +1,7 @@
 use std::str::Chars;
 
+use crate::unit_tokenizer::UnitTokenizer;
+
 pub type LalrpopToken = Result<(usize, Token, usize), Error>;
 
 pub struct Tokenizer<'input> {
@@ -10,13 +12,12 @@ pub struct Tokenizer<'input> {
     tokens: Vec<LalrpopToken>,
 
     buffer: String,
-    unit_buffer: String,
 
     // The tokenizer needs help recognizing known functions or constants
     // TODO: allow for custom functions
     consts: Vec<&'static str>,
     funcs: Vec<&'static str>,
-    is_currency_symbol: fn(&str) -> bool,
+    currencies: Vec<&'static str>,
     of_operator: fn(&str) -> bool,
 }
 
@@ -28,10 +29,10 @@ pub enum Error {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     Number(String),
-    Text(String),
+    Unit(String),
     Percent(String),
     FunctionCall(String),
-    CurrencySymbol(String),
+    PrefixCurrency(String),
     UnaryNeg,
     UnaryNot,
     Factorial,
@@ -66,10 +67,6 @@ enum State {
     BeforeOp,
     BeforeExprText,
     AfterNumberText,
-    InUnit,
-    InUnitAmbiguousOp,
-    InUnitAfterAmbiguousOp,
-    InUnitPower,
     Eof,
 }
 
@@ -82,16 +79,15 @@ impl<'input> Tokenizer<'input> {
             tokens: Vec::new(),
 
             buffer: String::new(),
-            unit_buffer: String::new(),
 
             // Later we'll plug in the actual functions
             consts: vec!["pi", "e"],
             funcs: vec![
                 "abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "cbrt", "ceil", "cos",
-                "cosh", "exp", "floor", "ln", "log", "log2", "rand", "round", "sin", "sinh", "sqrt", "tan",
-                "tanh", "trunc",
+                "cosh", "exp", "floor", "ln", "log", "log2", "rand", "round", "sin", "sinh",
+                "sqrt", "tan", "tanh", "trunc",
             ],
-            is_currency_symbol: |s| vec!["$", "€", "£", "¥", "₹", "₽", "₿"].contains(&s),
+            currencies: vec!["$", "€", "£", "¥", "₹", "₽", "₿"],
             of_operator: |s| s == "of",
         }
     }
@@ -352,9 +348,26 @@ impl<'input> Tokenizer<'input> {
                         self.state = State::BeforeExpr;
                     }
                     Some(c) if c == '/' => {
-                        self.consume();
-                        self.produce(Token::OpDiv);
-                        self.state = State::BeforeExpr;
+                        // Let's see if this is a weirdly specified unit. Like: 3/s (Hz!)
+                        let mut ut = UnitTokenizer::new(
+                            self.input.clone(),
+                            self.forbidden_units(),
+                            self.currencies.clone(),
+                        );
+
+                        let unit = ut.run();
+                        if unit.len() > 0 {
+                            self.skip(ut.offset());
+                            self.produce(Token::Unit(unit));
+
+                            // After a unit or a variable, we expect an operator
+                            self.state = State::BeforeOp;
+                        } else {
+                            // Nope, this is a division
+                            self.consume();
+                            self.produce(Token::OpDiv);
+                            self.state = State::BeforeExpr;
+                        }
                     }
                     Some(c) if c == '^' => {
                         self.consume();
@@ -406,11 +419,20 @@ impl<'input> Tokenizer<'input> {
                         self.consume();
                     }
                     Some(_) => {
-                        let word = self.read_word();
+                        // Let's see if this is a weirdly specified unit. Like: 3/s (Hz!)
+                        let mut ut = UnitTokenizer::new(
+                            self.input.clone(),
+                            self.forbidden_units(),
+                            self.currencies.clone(),
+                        );
 
-                        if word.len() > 0 {
-                            self.skip(word.chars().count());
-                            self.produce(Token::Text(word));
+                        let unit = ut.run();
+                        if unit.len() > 0 {
+                            self.skip(ut.offset());
+                            self.produce(Token::Unit(unit));
+
+                            // After a unit or a variable, we expect an operator
+                            self.state = State::BeforeOp;
                         } else {
                             self.produce_error(Error::UnexpectedCharacter(self.peek().unwrap()));
                             self.produce(Token::Eof);
@@ -439,9 +461,9 @@ impl<'input> Tokenizer<'input> {
                             self.produce(Token::FunctionCall(self.buffer.clone()));
                             self.state = State::BeforeExpr;
                             break;
-                        } else if (self.is_currency_symbol)(&self.buffer) {
+                        } else if self.currencies.contains(&self.buffer.as_str()) {
                             self.skip(self.buffer.chars().count());
-                            self.produce(Token::CurrencySymbol(self.buffer.clone()));
+                            self.produce(Token::PrefixCurrency(self.buffer.clone()));
                             self.state = State::BeforeExpr;
                             break;
                         }
@@ -450,21 +472,9 @@ impl<'input> Tokenizer<'input> {
                     }
 
                     if self.buffer.len() == 0 {
-                        // We didn't find a function, so it must be arbitrary text (a unit, a variable, etc.)
-                        // re-read the buffer and produce a text token
-                        let word = self.read_word();
-
-                        if word.len() > 0 {
-                            self.skip(word.chars().count());
-                            self.produce(Token::Text(word));
-
-                            // After a unit or a variable, we expect an operator
-                            self.state = State::BeforeOp;
-                        } else {
-                            // This is text with non-alphanumeric characters
-                            self.produce_error(Error::UnexpectedCharacter(self.peek().unwrap()));
-                            self.produce(Token::Eof);
-                        }
+                        // This is text with non-alphanumeric characters
+                        self.produce_error(Error::UnexpectedCharacter(self.peek().unwrap()));
+                        self.produce(Token::Eof);
                     }
                 }
             }
@@ -515,23 +525,22 @@ impl<'input> Tokenizer<'input> {
                             self.produce(Token::OpOf);
                             self.state = State::BeforeExpr;
                             break;
-                        } else if (self.is_currency_symbol)(&self.buffer) {
-                            self.skip(self.buffer.chars().count());
-                            self.produce(Token::CurrencySymbol(self.buffer.clone()));
-                            self.state = State::AfterNumberSpace;
-                            break;
                         }
-                        
+
                         self.buffer.pop();
                     }
 
                     if self.buffer.len() == 0 {
-                        // We didn't find a function, so it must be an unit or a variable
-                        
-                        let word = self.read_word();
-                        if word.len() > 0 {
-                            self.skip(word.chars().count());
-                            self.produce(Token::Text(word));
+                        let mut ut = UnitTokenizer::new(
+                            self.input.clone(),
+                            self.forbidden_units(),
+                            self.currencies.clone(),
+                        );
+
+                        let unit = ut.run();
+                        if unit.len() > 0 {
+                            self.skip(ut.offset());
+                            self.produce(Token::Unit(unit));
 
                             // After a unit or a variable, we expect an operator
                             self.state = State::BeforeOp;
@@ -543,69 +552,9 @@ impl<'input> Tokenizer<'input> {
                     }
                 }
             }
-            State::InUnit => {
-                match self.peek() {
-                    Some(c) if c.is_alphanumeric() => {
-                        let ch = self.consume().unwrap();
-                        self.buffer.push(ch);
-                    }
-                    Some(c) if c.is_whitespace() => {
-                        self.consume(); // Ignore whitespace
-                    }
-                    Some(c) if c == '*' || c == '/' => {
-                        self.state = State::InUnitAmbiguousOp;
-                    }
-                    Some('^') => {
-                        self.consume();
-                        self.buffer.push('^');
-                        self.state = State::InUnitPower;
-                    }
-                    Some(_) => {
-                        self.produce(Token::Text(self.buffer.clone()));
-                        self.state = State::BeforeOp;
-                    }
-                    None => {
-                        self.produce(Token::Text(self.buffer.clone()));
-                        self.produce(Token::Eof);
-                    }
-                }
-            }
-            State::InUnitAmbiguousOp => {
-                let next = self.consume().unwrap();
-
-                // match next {
-                //     Some('*') => {
-                //         self.unit_buffer.push(self.consume().unwrap());
-                //     }
-                //     Some('/') => {
-                //         self.unit_buffer.push(self.consume().unwrap());
-                //         self.produce(Token::Text(self.unit_buffer.clone()));
-                //         self.state = State::BeforeOp;
-                //     }
-                //     Some(_) | None => unreachable!(),
-                // }
-            }
-            State::InUnitPower => {
-                let next = self.peek();
-
-                match next {
-                    Some(c) if c.is_digit(10) || c == '.' || c == ',' || c == '-' => {
-                        let ch = self.consume().unwrap();
-                        self.buffer.push(ch);
-                    }
-                    Some(c) if c.is_whitespace() => {
-                        self.consume(); // Ignore whitespace
-                    }
-                    _ => {
-                        self.produce(Token::Text(self.buffer.clone()));
-                        self.state = State::InUnit;
-                    }
-                }
-            }
             State::Eof => {
                 // Do nothing
             }
-            _ => panic!("Unexpected state: {:?}", self.state),
         }
     }
 
@@ -617,10 +566,10 @@ impl<'input> Tokenizer<'input> {
         let end = self.pos;
         let size = match token {
             Token::Number(ref s) => s.len(),
-            Token::Text(ref s) => s.len(),
+            Token::Unit(ref s) => s.len(),
             Token::Percent(ref s) => s.len() + 1,
             Token::FunctionCall(ref s) => s.len(),
-            Token::CurrencySymbol(ref s) => s.len(),
+            Token::PrefixCurrency(ref s) => s.len(),
             Token::OpShl | Token::OpShr => 2,
             Token::OpXor | Token::OpRol | Token::OpRor => 3,
             Token::Eof => 0,
@@ -683,6 +632,14 @@ impl<'input> Tokenizer<'input> {
 
     pub fn peek_nth(&mut self, n: usize) -> Option<char> {
         self.input.clone().nth(n)
+    }
+
+    pub fn forbidden_units(&self) -> Vec<&'input str> {
+        self.consts
+            .clone()
+            .into_iter()
+            .chain(self.funcs.clone())
+            .collect()
     }
 }
 
@@ -1494,17 +1451,20 @@ mod tests {
     fn test_currency_symbol() {
         assert_eq!(
             run("$10"),
-            vec![Token::CurrencySymbol("$".to_string()), Token::Number("10".to_string())]
+            vec![
+                Token::PrefixCurrency("$".to_string()),
+                Token::Number("10".to_string())
+            ]
         );
 
         assert_eq!(
             run("10$ + 20€"),
             vec![
                 Token::Number("10".to_string()),
-                Token::CurrencySymbol("$".to_string()),
+                Token::Unit("$".to_string()),
                 Token::OpAdd,
                 Token::Number("20".to_string()),
-                Token::CurrencySymbol("€".to_string())
+                Token::Unit("€".to_string())
             ]
         );
 
@@ -1512,13 +1472,13 @@ mod tests {
             run("10 $ + € 20 + 30£"),
             vec![
                 Token::Number("10".to_string()),
-                Token::CurrencySymbol("$".to_string()),
+                Token::Unit("$".to_string()),
                 Token::OpAdd,
-                Token::CurrencySymbol("€".to_string()),
+                Token::PrefixCurrency("€".to_string()),
                 Token::Number("20".to_string()),
                 Token::OpAdd,
                 Token::Number("30".to_string()),
-                Token::CurrencySymbol("£".to_string())
+                Token::Unit("£".to_string())
             ]
         );
     }
@@ -1527,7 +1487,7 @@ mod tests {
     fn test_unit_single_letter() {
         assert_eq!(
             run("3m"),
-            vec![Token::Number("3".to_string()), Token::Text("m".to_string())]
+            vec![Token::Number("3".to_string()), Token::Unit("m".to_string())]
         );
     }
 
@@ -1535,7 +1495,10 @@ mod tests {
     fn test_unit_multiple_letters() {
         assert_eq!(
             run("3kg"),
-            vec![Token::Number("3".to_string()), Token::Text("kg".to_string())]
+            vec![
+                Token::Number("3".to_string()),
+                Token::Unit("kg".to_string())
+            ]
         );
     }
 
@@ -1543,7 +1506,10 @@ mod tests {
     fn test_unit_with_space() {
         assert_eq!(
             run("3 kg"),
-            vec![Token::Number("3".to_string()), Token::Text("kg".to_string())]
+            vec![
+                Token::Number("3".to_string()),
+                Token::Unit("kg".to_string())
+            ]
         );
     }
 
@@ -1553,7 +1519,7 @@ mod tests {
             run("3m2"),
             vec![
                 Token::Number("3".to_string()),
-                Token::Text("m2".to_string()),
+                Token::Unit("m^2".to_string()),
             ]
         );
     }
@@ -1564,37 +1530,7 @@ mod tests {
             run("3m^2"),
             vec![
                 Token::Number("3".to_string()),
-                Token::Text("m".to_string()),
-                Token::OpPow,
-                Token::Number("2".to_string()),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_unit_with_explicit_pow_and_space() {
-        assert_eq!(
-            run("3 m ^ 2"),
-            vec![
-                Token::Number("3".to_string()),
-                Token::Text("m".to_string()),
-                Token::OpPow,
-                Token::Number("2".to_string()),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_unit_with_explicit_pow_and_space_and_op() {
-        assert_eq!(
-            run("3 m ^ 2 + 4"),
-            vec![
-                Token::Number("3".to_string()),
-                Token::Text("m".to_string()),
-                Token::OpPow,
-                Token::Number("2".to_string()),
-                Token::OpAdd,
-                Token::Number("4".to_string()),
+                Token::Unit("m^2".to_string()),
             ]
         );
     }
@@ -1605,9 +1541,7 @@ mod tests {
             run("3m*s"),
             vec![
                 Token::Number("3".to_string()),
-                Token::Text("m".to_string()),
-                Token::OpMul,
-                Token::Text("s".to_string()),
+                Token::Unit("m*s".to_string()),
             ]
         );
     }
@@ -1618,9 +1552,7 @@ mod tests {
             run("3m/s"),
             vec![
                 Token::Number("3".to_string()),
-                Token::Text("m".to_string()),
-                Token::OpDiv,
-                Token::Text("s".to_string()),
+                Token::Unit("m/s".to_string()),
             ]
         );
     }
@@ -1631,9 +1563,7 @@ mod tests {
             run("3m/s2"),
             vec![
                 Token::Number("3".to_string()),
-                Token::Text("m".to_string()),
-                Token::OpDiv,
-                Token::Text("s2".to_string()),
+                Token::Unit("m/s^2".to_string()),
             ]
         );
     }
@@ -1644,11 +1574,7 @@ mod tests {
             run("3m/s^2"),
             vec![
                 Token::Number("3".to_string()),
-                Token::Text("m".to_string()),
-                Token::OpDiv,
-                Token::Text("s".to_string()),
-                Token::OpPow,
-                Token::Number("2".to_string()),
+                Token::Unit("m/s^2".to_string()),
             ]
         );
     }
@@ -1659,13 +1585,7 @@ mod tests {
             run("3m/(kg*s)"),
             vec![
                 Token::Number("3".to_string()),
-                Token::Text("m".to_string()),
-                Token::OpDiv,
-                Token::LParen,
-                Token::Text("kg".to_string()),
-                Token::OpMul,
-                Token::Text("s".to_string()),
-                Token::RParen,
+                Token::Unit("m/(kg*s)".to_string()),
             ]
         );
     }
@@ -1675,10 +1595,9 @@ mod tests {
         assert_eq!(
             run("$3/kg"),
             vec![
-                Token::CurrencySymbol("$".to_string()),
+                Token::PrefixCurrency("$".to_string()),
                 Token::Number("3".to_string()),
-                Token::OpDiv,
-                Token::Text("kg".to_string()),
+                Token::Unit("/kg".to_string()),
             ]
         );
     }
@@ -1722,12 +1641,7 @@ mod tests {
             )
         );
 
-        assert_eq!(
-            run("hello"),
-            vec![
-                Token::Text("hello".to_string()),
-            ]
-        );
+        assert_eq!(run("hello"), vec![Token::Unit("hello".to_string()),]);
 
         assert_eq!(
             run("(3 + 2) hello"),
@@ -1737,7 +1651,7 @@ mod tests {
                 Token::OpAdd,
                 Token::Number("2".to_string()),
                 Token::RParen,
-                Token::Text("hello".to_string()),
+                Token::Unit("hello".to_string()),
             ],
         );
     }

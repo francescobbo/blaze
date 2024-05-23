@@ -9,6 +9,7 @@ pub struct UnitTokenizer<'input> {
     current_word: String,
 
     non_units: Vec<&'input str>,
+    currencies: Vec<&'input str>,
 
     nesting: usize,
 }
@@ -22,14 +23,18 @@ enum State {
     BeforePower,
     InPower,
     SpaceAfterUnit,
-    End
+    End,
 }
 
 /// The unit tokenizer generates a single token from a string, greedily trying to match the longest possible unit.
-/// It expects the input to start with a viable unit. 
+/// It expects the input to start with a viable unit.
 /// The non_units parameter is a list of strings that should not be considered units and halt the matching process if encountered.
 impl<'input> UnitTokenizer<'input> {
-    pub fn new(input: Chars<'input>, non_units: Vec<&'input str>) -> Self {
+    pub fn new(
+        input: Chars<'input>,
+        non_units: Vec<&'input str>,
+        currencies: Vec<&'input str>,
+    ) -> Self {
         Self {
             state: State::BeforeUnit,
             input,
@@ -39,8 +44,9 @@ impl<'input> UnitTokenizer<'input> {
             current_word: String::new(),
 
             non_units,
+            currencies,
 
-            nesting: 0
+            nesting: 0,
         }
     }
 
@@ -54,9 +60,14 @@ impl<'input> UnitTokenizer<'input> {
             current_word: String::new(),
 
             non_units: self.non_units.clone(),
+            currencies: self.currencies.clone(),
 
-            nesting: self.nesting + 1
+            nesting: self.nesting + 1,
         }
+    }
+
+    pub fn offset(&self) -> usize {
+        self.pos
     }
 
     pub fn step(&mut self) {
@@ -66,76 +77,81 @@ impl<'input> UnitTokenizer<'input> {
         }
 
         match self.state {
-            State::BeforeUnit => {
-                match self.peek() {
-                    Some(c) if c.is_alphabetic() => {
-                        self.state = State::Unit;
-                    }
-                    Some(c) if c.is_whitespace() => {
-                        self.consume();
-                    }
-                    Some('/') => {
-                        self.state = State::Operator;
-                    }
-                    _ => {
+            State::BeforeUnit => match self.peek() {
+                Some(c)
+                    if c.is_alphabetic() || self.currencies.contains(&c.to_string().as_str()) =>
+                {
+                    self.state = State::Unit;
+                }
+                Some(c) if c.is_whitespace() => {
+                    self.consume();
+                }
+                Some('/') => {
+                    self.state = State::Operator;
+                }
+                _ => {
+                    self.state = State::End;
+                }
+            },
+            State::Unit => match self.peek() {
+                Some(c)
+                    if c.is_alphabetic() || self.currencies.contains(&c.to_string().as_str()) =>
+                {
+                    self.consume();
+                    self.current_word.push(c);
+
+                    if self.non_units.contains(&self.current_word.as_str()) {
                         self.state = State::End;
                     }
                 }
-            }
-            State::Unit => {
-                match self.peek() {
-                    Some(c) if c.is_alphabetic() => {
-                        self.consume();
-                        self.current_word.push(c);
+                Some(c) if c.is_digit(10) => {
+                    self.current_word.push('^');
+                    self.state = State::ImplicitPower;
+                }
+                Some(' ') => {
+                    self.matched.push_str(&self.current_word);
+                    self.state = State::SpaceAfterUnit;
+                }
+                Some('*') | Some('/') | Some('^') => {
+                    self.matched.push_str(&self.current_word);
+                    self.current_word.clear();
 
-                        if self.non_units.contains(&self.current_word.as_str()) {
-                            self.state = State::End;
-                        }
-                    }
-                    Some(c) if c.is_digit(10) => {
-                        self.current_word.push('^');
-                        self.state = State::ImplicitPower;
-                    }
-                    Some(' ') => {
-                        self.matched.push_str(&self.current_word);
-                        self.state = State::SpaceAfterUnit;
-                    }
-                    Some('*') | Some('/') | Some('^') => {
-                        self.matched.push_str(&self.current_word);
-                        self.current_word.clear();
+                    self.state = State::Operator;
+                }
+                _ => {
+                    self.matched.push_str(&self.current_word);
+                    self.state = State::End;
+                }
+            },
+            State::ImplicitPower => match self.peek() {
+                Some(c) if c.is_digit(10) => {
+                    self.consume();
+                    self.current_word.push(c);
 
-                        self.state = State::Operator;
-                    }
-                    _ => {
-                        self.matched.push_str(&self.current_word);
+                    if self
+                        .non_units
+                        .contains(&self.current_word.replace("^", "").as_str())
+                    {
                         self.state = State::End;
                     }
                 }
-            }
-            State::ImplicitPower => {
-                match self.peek() {
-                    Some(c) if c.is_digit(10) => {
-                        self.consume();
-                        self.current_word.push(c);
-                    }
-                    Some(c) if c.is_whitespace() => {
-                        self.consume();
-                        self.state = State::SpaceAfterUnit;
-                    }
-                    Some('*') | Some('/') => {
-                        self.matched.push_str(&self.current_word);
-                        self.current_word.clear();
-
-                        self.state = State::Operator;
-                    }
-                    _ => {
-                        self.matched.push_str(&self.current_word);
-                        self.current_word.clear();
-
-                        self.state = State::End;
-                    }
+                Some(c) if c.is_whitespace() => {
+                    self.consume();
+                    self.state = State::SpaceAfterUnit;
                 }
-            }
+                Some('*') | Some('/') => {
+                    self.matched.push_str(&self.current_word);
+                    self.current_word.clear();
+
+                    self.state = State::Operator;
+                }
+                _ => {
+                    self.matched.push_str(&self.current_word);
+                    self.current_word.clear();
+
+                    self.state = State::End;
+                }
+            },
             State::Operator => {
                 match self.peek().unwrap() {
                     '^' => {
@@ -210,7 +226,7 @@ impl<'input> UnitTokenizer<'input> {
                             self.state = State::End;
                         }
                     }
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 }
             }
             State::BeforePower => {
@@ -302,139 +318,94 @@ mod tests {
     use super::*;
 
     fn run(input: &str) -> String {
-        UnitTokenizer::new(input.chars(), vec!["sin", "pi"]).run()
+        UnitTokenizer::new(input.chars(), vec!["sin", "pi", "tan2"], vec!["$", "€"]).run()
     }
 
     #[test]
     fn test_unit_tokenizer() {
-        assert_eq!(
-            run("kg"),
-            "kg"
-        );
+        assert_eq!(run("kg"), "kg");
     }
 
     #[test]
     fn test_unit_tokenizer_with_whitespace() {
-        assert_eq!(
-            run("kg "),
-            "kg"
-        );
+        assert_eq!(run("kg "), "kg");
     }
 
     #[test]
     fn test_unit_tokenizer_with_number() {
-        assert_eq!(
-            run("m2"),
-            "m^2"
-        );
+        assert_eq!(run("m2"), "m^2");
     }
 
     #[test]
     fn test_unit_tokenizer_with_power() {
-        assert_eq!(
-            run("m^2"),
-            "m^2"
-        );
+        assert_eq!(run("m^2"), "m^2");
 
-        assert_eq!(
-            run("m^-1"),
-            "m^-1"
-        );
+        assert_eq!(run("m^-1"), "m^-1");
     }
 
     #[test]
     fn test_unit_tokenizer_with_division() {
-        assert_eq!(
-            run("m/s"),
-            "m/s"
-        );
+        assert_eq!(run("m/s"), "m/s");
     }
 
     #[test]
     fn test_unit_tokenizer_with_parentheses() {
-        assert_eq!(
-            run("m/(s/(kg))"),
-            "m/(s/(kg))"
-        );
+        assert_eq!(run("m/(s/(kg))"), "m/(s/(kg))");
     }
 
     #[test]
     fn test_unit_tokenizer_with_parentheses_power_and_spaces() {
-        assert_eq!(
-            run("m^2 /( s * kg ) "),
-            "m^2/(s*kg)"
-        );
+        assert_eq!(run("m^2 /( s * kg ) "), "m^2/(s*kg)");
     }
 
     #[test]
     fn test_unit_followed_by_standard_multiplication() {
-        assert_eq!(
-            run("kg * 3"),
-            "kg"
-        );
+        assert_eq!(run("kg * 3"), "kg");
 
-        assert_eq!(
-            run("kg*3"),
-            "kg"
-        );
+        assert_eq!(run("kg*3"), "kg");
     }
 
     #[test]
     fn test_unit_followed_by_standard_division() {
-        assert_eq!(
-            run("kg / 3"),
-            "kg"
-        );
+        assert_eq!(run("kg / 3"), "kg");
 
-        assert_eq!(
-            run("kg/3"),
-            "kg"
-        );
+        assert_eq!(run("kg/3"), "kg");
     }
 
     #[test]
     fn test_unit_followed_by_multiplication_constant() {
-        assert_eq!(
-            run("kg * pi"),
-            "kg"
-        );
-        
-        assert_eq!(
-            run("kg*pi"),
-            "kg"
-        );
+        assert_eq!(run("kg * pi"), "kg");
+
+        assert_eq!(run("kg*pi"), "kg");
     }
 
     #[test]
     fn test_unit_followed_by_division_constant() {
-        assert_eq!(
-            run("kg / pi"),
-            "kg"
-        );
+        assert_eq!(run("kg / pi"), "kg");
     }
 
     #[test]
     fn test_unit_followed_by_multiplication_function() {
-        assert_eq!(
-            run("kg * sin(3)"),
-            "kg"
-        );
+        assert_eq!(run("kg * sin(3)"), "kg");
     }
 
     #[test]
     fn test_unit_followed_by_division_function() {
-        assert_eq!(
-            run("kg / sin(3)"),
-            "kg"
-        );
+        assert_eq!(run("kg / sin(3)"), "kg");
     }
 
     #[test]
     fn test_unit_starting_with_division() {
-        assert_eq!(
-            run("/kg + 2"),
-            "/kg"
-        );
+        assert_eq!(run("/kg + 2"), "/kg");
     }
 
+    #[test]
+    fn test_funtion_with_number() {
+        assert_eq!(run("tan2"), "");
+    }
+
+    #[test]
+    fn test_currencies() {
+        assert_eq!(run("€/s"), "€/s");
+    }
 }
