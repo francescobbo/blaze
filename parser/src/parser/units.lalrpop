@@ -1,11 +1,22 @@
-use crate::parser::tokenizer;
-use crate::ast::Expr;
+use crate::ast::UnitExpr;
 
 grammar;
 
-pub Term: String = {
-    <u:Unit> => u,
-    "(" <u:Unit> ")" => u,
+pub Expr: UnitExpr = {
+    #[precedence(level="0")]
+    Primary,
+    "/" <r:Expr> => r.invert(),
+    #[precedence(level="1")] #[assoc(side="right")]
+    <l:Expr> "^" <n:Number> => l.pow(n.parse().unwrap()),
+    #[precedence(level="2")] #[assoc(side="left")]
+    <l:Expr> "*" <r:Expr> => UnitExpr::Mul(Box::new(l), Box::new(r)),
+    <l:Expr> "/" <r:Expr> => UnitExpr::Mul(Box::new(l), Box::new(r.invert())),
 };
 
-Unit: String = <s:r"[a-zA-Z]+"> => s;
+pub Primary: UnitExpr = {
+    <u:Unit> => UnitExpr::Unit(u, 1),
+    "(" <e:Expr> ")" => e,
+};
+
+Unit: String = <s:r"[a-zA-Z]+"> => s.to_string();
+Number: String = <s:r"-?[1-9][0-9]*"> => s.to_string();

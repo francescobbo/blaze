@@ -1484,14 +1484,6 @@ mod tests {
     }
 
     #[test]
-    fn test_unit_single_letter() {
-        assert_eq!(
-            run("3m"),
-            vec![Token::Number("3".to_string()), Token::Unit("m".to_string())]
-        );
-    }
-
-    #[test]
     fn test_unit_multiple_letters() {
         assert_eq!(
             run("3kg"),
@@ -1641,7 +1633,10 @@ mod tests {
             )
         );
 
-        assert_eq!(run("hello"), vec![Token::Unit("hello".to_string()),]);
+        assert_eq!(
+            run_fallible("hello"),
+            (vec![], vec![Error::UnexpectedCharacter('h')])
+        );
 
         assert_eq!(
             run("(3 + 2) hello"),

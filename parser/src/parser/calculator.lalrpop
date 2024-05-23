@@ -1,5 +1,6 @@
 use crate::parser::tokenizer;
 use crate::ast::Expr;
+use crate::unit::Unit;
 
 grammar;
 
@@ -69,12 +70,12 @@ pub Expr: Box<Expr> = {
 };
 
 Term: Box<Expr> = {
-    <t:Primary> <u:unit> => Box::new(Expr::WithUnit(t, u)),
+    <t:Primary> <u:unit> => Box::new(Expr::WithUnit(t, Unit::from_str(&u))),
     <c:currency> <t:Primary> <u:unit?> => {
         if let Some(u) = u {
-            Box::new(Expr::WithUnit(t, c + "*" + &u))
+            Box::new(Expr::WithUnit(t, Unit::from_str(&(c + "*" + &u))))
         } else {
-            Box::new(Expr::WithUnit(t, c))
+            Box::new(Expr::WithUnit(t, Unit::from_str(&c)))
         }
     },
 
@@ -82,7 +83,7 @@ Term: Box<Expr> = {
 };
 
 Primary: Box<Expr> = {
-    <n:number> => Box::new(Expr::Number(n, "".to_string())),
+    <n:number> => Box::new(Expr::Number(n, Unit::empty())),
     <p:percent> => Box::new(Expr::Percent(p)),
     lparen <Expr> rparen
 };

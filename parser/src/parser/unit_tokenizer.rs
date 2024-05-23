@@ -99,26 +99,38 @@ impl<'input> UnitTokenizer<'input> {
                 {
                     self.consume();
                     self.current_word.push(c);
-
-                    if self.non_units.contains(&self.current_word.as_str()) {
-                        self.state = State::End;
-                    }
                 }
                 Some(c) if c.is_digit(10) => {
+                    if self.non_units.contains(&self.current_word.as_str()) {
+                        self.state = State::End;
+                        return;
+                    }
                     self.current_word.push('^');
                     self.state = State::ImplicitPower;
                 }
                 Some(' ') => {
+                    if self.non_units.contains(&self.current_word.as_str()) {
+                        self.state = State::End;
+                        return;
+                    }
                     self.matched.push_str(&self.current_word);
                     self.state = State::SpaceAfterUnit;
                 }
                 Some('*') | Some('/') | Some('^') => {
+                    if self.non_units.contains(&self.current_word.as_str()) {
+                        self.state = State::End;
+                        return;
+                    }
                     self.matched.push_str(&self.current_word);
                     self.current_word.clear();
 
                     self.state = State::Operator;
                 }
                 _ => {
+                    if self.non_units.contains(&self.current_word.as_str()) {
+                        self.state = State::End;
+                        return;
+                    }
                     self.matched.push_str(&self.current_word);
                     self.state = State::End;
                 }
@@ -127,25 +139,42 @@ impl<'input> UnitTokenizer<'input> {
                 Some(c) if c.is_digit(10) => {
                     self.consume();
                     self.current_word.push(c);
-
+                }
+                Some(c) if c.is_whitespace() => {
                     if self
                         .non_units
                         .contains(&self.current_word.replace("^", "").as_str())
                     {
                         self.state = State::End;
+                        return;
                     }
-                }
-                Some(c) if c.is_whitespace() => {
+
                     self.consume();
                     self.state = State::SpaceAfterUnit;
                 }
                 Some('*') | Some('/') => {
+                    if self
+                        .non_units
+                        .contains(&self.current_word.replace("^", "").as_str())
+                    {
+                        self.state = State::End;
+                        return;
+                    }
+
                     self.matched.push_str(&self.current_word);
                     self.current_word.clear();
 
                     self.state = State::Operator;
                 }
                 _ => {
+                    if self
+                        .non_units
+                        .contains(&self.current_word.replace("^", "").as_str())
+                    {
+                        self.state = State::End;
+                        return;
+                    }
+                    
                     self.matched.push_str(&self.current_word);
                     self.current_word.clear();
 
@@ -407,5 +436,13 @@ mod tests {
     #[test]
     fn test_currencies() {
         assert_eq!(run("€/s"), "€/s");
+    }
+
+    #[test]
+    fn test_ambiguous_unit() {
+        // pi might be considered a constant rather than "pill" prefix.
+        assert_eq!(run("pill/day"), "pill/day");
+        // Do not match "sin" as a unit
+        assert_eq!(run("km/eur"), "km/eur");
     }
 }
