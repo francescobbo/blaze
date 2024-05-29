@@ -15,7 +15,7 @@ pub fn parse(
 
 #[cfg(test)]
 mod tests {
-    use crate::{ast::UnitExpr, unit::Unit};
+    use crate::{ast::UnitExpr, value_unit::ValueUnit};
 
     use super::*;
 
@@ -31,29 +31,29 @@ mod tests {
     fn test_number() {
         assert_eq!(
             run("123"),
-            ast::Expr::Number("123".to_string(), Unit::empty())
+            ast::Expr::Number("123".to_string(), ValueUnit::empty())
         );
 
         assert_eq!(
             run("123.456"),
-            ast::Expr::Number("123.456".to_string(), Unit::empty())
+            ast::Expr::Number("123.456".to_string(), ValueUnit::empty())
         );
 
         assert_eq!(
             run("123,45,.6"),
-            ast::Expr::Number("123,45,.6".to_string(), Unit::empty())
+            ast::Expr::Number("123,45,.6".to_string(), ValueUnit::empty())
         );
 
         assert_eq!(
             run("+123"),
-            ast::Expr::Number("123".to_string(), Unit::empty())
+            ast::Expr::Number("123".to_string(), ValueUnit::empty())
         );
 
         assert_eq!(
             run("-123"),
             ast::Expr::UnaryNegation(Box::new(ast::Expr::Number(
                 "123".to_string(),
-                Unit::empty()
+                ValueUnit::empty()
             )))
         );
 
@@ -61,17 +61,17 @@ mod tests {
             run("~123"),
             ast::Expr::UnaryNot(Box::new(ast::Expr::Number(
                 "123".to_string(),
-                Unit::empty()
+                ValueUnit::empty()
             )))
         );
 
         assert_eq!(
             run("1 - -2"),
             ast::Expr::Subtract(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::UnaryNegation(Box::new(ast::Expr::Number(
                     "2".to_string(),
-                    Unit::empty()
+                    ValueUnit::empty()
                 ))))
             )
         );
@@ -79,10 +79,10 @@ mod tests {
         assert_eq!(
             run("3 - ~4"),
             ast::Expr::Subtract(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::UnaryNot(Box::new(ast::Expr::Number(
                     "4".to_string(),
-                    Unit::empty()
+                    ValueUnit::empty()
                 ))))
             )
         );
@@ -97,8 +97,8 @@ mod tests {
         assert_eq!(
             run("123 % 4"),
             ast::Expr::Modulo(
-                Box::new(ast::Expr::Number("123".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("123".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
             )
         );
 
@@ -108,7 +108,7 @@ mod tests {
             run("123%pi"),
             ast::Expr::Multiply(
                 Box::new(ast::Expr::Percent("123".to_string())),
-                Box::new(ast::Expr::Number("pi".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("pi".to_string(), ValueUnit::empty()))
             )
         );
 
@@ -117,8 +117,8 @@ mod tests {
             ast::Expr::Multiply(
                 Box::new(ast::Expr::Percent("123".to_string())),
                 Box::new(ast::Expr::Add(
-                    Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
                 ))
             )
         );
@@ -128,7 +128,7 @@ mod tests {
     fn test_factorial() {
         assert_eq!(
             run("5!"),
-            ast::Expr::UnaryFactorial(Box::new(ast::Expr::Number("5".to_string(), Unit::empty())))
+            ast::Expr::UnaryFactorial(Box::new(ast::Expr::Number("5".to_string(), ValueUnit::empty())))
         );
 
         assert_eq!(
@@ -136,9 +136,9 @@ mod tests {
             ast::Expr::Multiply(
                 Box::new(ast::Expr::UnaryFactorial(Box::new(ast::Expr::Number(
                     "5".to_string(),
-                    Unit::empty()
+                    ValueUnit::empty()
                 )))),
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty()))
             )
         )
     }
@@ -148,48 +148,48 @@ mod tests {
         assert_eq!(
             run("1 + 2"),
             ast::Expr::Add(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("1 - 2"),
             ast::Expr::Subtract(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("1 * 2"),
             ast::Expr::Multiply(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("1 / 2"),
             ast::Expr::Divide(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("1 ^ 2"),
             ast::Expr::Power(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("1 % 2"),
             ast::Expr::Modulo(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
             )
         );
 
@@ -197,20 +197,20 @@ mod tests {
             run("1 + 2 + 3"),
             ast::Expr::Add(
                 Box::new(ast::Expr::Add(
-                    Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
                 )),
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("1 + 2 * 3"),
             ast::Expr::Add(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::Multiply(
-                    Box::new(ast::Expr::Number("2".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("3".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty()))
                 ))
             )
         );
@@ -218,18 +218,18 @@ mod tests {
         assert_eq!(
             run("1 ** 2"),
             ast::Expr::Power(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("1 ^ 2 ^ 3"), // Test right associativity of power operator
             ast::Expr::Power(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::Power(
-                    Box::new(ast::Expr::Number("2".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("3".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty()))
                 ))
             )
         );
@@ -239,73 +239,73 @@ mod tests {
             ast::Expr::Add(
                 Box::new(ast::Expr::UnaryNegation(Box::new(ast::Expr::Number(
                     "3".to_string(),
-                    Unit::empty()
+                    ValueUnit::empty()
                 )))),
-                Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3 & 4"),
             ast::Expr::And(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3 | 4"),
             ast::Expr::Or(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3 xor 4"),
             ast::Expr::Xor(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3 << 4"),
             ast::Expr::ShiftLeft(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3 >> 4"),
             ast::Expr::ShiftRight(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3 rol 4"),
             ast::Expr::RotateLeft(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3 ror 4"),
             ast::Expr::RotateRight(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3 mod 5"),
             ast::Expr::Modulo(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("5".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("5".to_string(), ValueUnit::empty()))
             )
         );
 
@@ -314,23 +314,23 @@ mod tests {
             run("1 & 2 | 3 xor 4 << 5 >> 6 rol 7 ror 8"),
             ast::Expr::Or(
                 Box::new(ast::Expr::And(
-                    Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
                 )),
                 Box::new(ast::Expr::Xor(
-                    Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                    Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                     Box::new(ast::Expr::RotateRight(
                         Box::new(ast::Expr::RotateLeft(
                             Box::new(ast::Expr::ShiftRight(
                                 Box::new(ast::Expr::ShiftLeft(
-                                    Box::new(ast::Expr::Number("4".to_string(), Unit::empty())),
-                                    Box::new(ast::Expr::Number("5".to_string(), Unit::empty()))
+                                    Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty())),
+                                    Box::new(ast::Expr::Number("5".to_string(), ValueUnit::empty()))
                                 )),
-                                Box::new(ast::Expr::Number("6".to_string(), Unit::empty()))
+                                Box::new(ast::Expr::Number("6".to_string(), ValueUnit::empty()))
                             )),
-                            Box::new(ast::Expr::Number("7".to_string(), Unit::empty()))
+                            Box::new(ast::Expr::Number("7".to_string(), ValueUnit::empty()))
                         )),
-                        Box::new(ast::Expr::Number("8".to_string(), Unit::empty()))
+                        Box::new(ast::Expr::Number("8".to_string(), ValueUnit::empty()))
                     ))
                 ))
             )
@@ -343,20 +343,20 @@ mod tests {
             run("(1 + 2) * 3"),
             ast::Expr::Multiply(
                 Box::new(ast::Expr::Add(
-                    Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
                 )),
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("1 + (2 * 3)"),
             ast::Expr::Add(
-                Box::new(ast::Expr::Number("1".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("1".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::Multiply(
-                    Box::new(ast::Expr::Number("2".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("3".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty()))
                 ))
             )
         );
@@ -364,10 +364,10 @@ mod tests {
         assert_eq!(
             run("3%(3 + 4)"), // This is a modulo, not an implicit multiplication with a percentage
             ast::Expr::Modulo(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::Add(
-                    Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
                 ))
             )
         );
@@ -375,10 +375,10 @@ mod tests {
         assert_eq!(
             run("3(5 + 4)"),
             ast::Expr::Multiply(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::Add(
-                    Box::new(ast::Expr::Number("5".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("4".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("5".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty()))
                 ))
             )
         );
@@ -386,16 +386,16 @@ mod tests {
         assert_eq!(
             run("(3 + 2   )"),
             ast::Expr::Add(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("-(3 + 2)"),
             ast::Expr::UnaryNegation(Box::new(ast::Expr::Add(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
             )))
         );
     }
@@ -404,16 +404,16 @@ mod tests {
     fn test_constants_and_functions() {
         assert_eq!(
             run("pi"),
-            ast::Expr::Number("pi".to_string(), Unit::empty())
+            ast::Expr::Number("pi".to_string(), ValueUnit::empty())
         );
 
-        assert_eq!(run("e"), ast::Expr::Number("e".to_string(), Unit::empty()));
+        assert_eq!(run("e"), ast::Expr::Number("e".to_string(), ValueUnit::empty()));
 
         assert_eq!(
             run("sin(3)"),
             ast::Expr::FunctionCall(
                 "sin".to_string(),
-                vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
             )
         );
 
@@ -421,7 +421,7 @@ mod tests {
             run("cos(3)"),
             ast::Expr::FunctionCall(
                 "cos".to_string(),
-                vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
             )
         );
 
@@ -429,7 +429,7 @@ mod tests {
             run("tan3"),
             ast::Expr::FunctionCall(
                 "tan".to_string(),
-                vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
             )
         );
 
@@ -437,7 +437,7 @@ mod tests {
             run("tan 3"),
             ast::Expr::FunctionCall(
                 "tan".to_string(),
-                vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
             )
         );
 
@@ -445,7 +445,7 @@ mod tests {
             run("log(3)"),
             ast::Expr::FunctionCall(
                 "log".to_string(),
-                vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
             )
         );
 
@@ -453,7 +453,7 @@ mod tests {
             run("ln(3)"),
             ast::Expr::FunctionCall(
                 "ln".to_string(),
-                vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
             )
         );
 
@@ -463,7 +463,7 @@ mod tests {
                 "sin".to_string(),
                 vec![ast::Expr::FunctionCall(
                     "cos".to_string(),
-                    vec![ast::Expr::Number("pi".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("pi".to_string(), ValueUnit::empty())]
                 )]
             )
         );
@@ -474,7 +474,7 @@ mod tests {
                 "sin".to_string(),
                 vec![ast::Expr::FunctionCall(
                     "cos".to_string(),
-                    vec![ast::Expr::Number("pi".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("pi".to_string(), ValueUnit::empty())]
                 )]
             )
         );
@@ -482,26 +482,26 @@ mod tests {
         assert_eq!(
             run("3pi"),
             ast::Expr::Multiply(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("pi".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("pi".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3e"),
             ast::Expr::Multiply(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("e".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("e".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3sin(3)"),
             ast::Expr::Multiply(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::FunctionCall(
                     "sin".to_string(),
-                    vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
                 ))
             )
         );
@@ -509,10 +509,10 @@ mod tests {
         assert_eq!(
             run("3cos(3)"),
             ast::Expr::Multiply(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::FunctionCall(
                     "cos".to_string(),
-                    vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
                 ))
             )
         );
@@ -520,10 +520,10 @@ mod tests {
         assert_eq!(
             run("3tan3"),
             ast::Expr::Multiply(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::FunctionCall(
                     "tan".to_string(),
-                    vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
                 ))
             )
         );
@@ -531,10 +531,10 @@ mod tests {
         assert_eq!(
             run("3tan 3"),
             ast::Expr::Multiply(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::FunctionCall(
                     "tan".to_string(),
-                    vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
                 ))
             )
         );
@@ -542,26 +542,26 @@ mod tests {
         assert_eq!(
             run("3 * pi"),
             ast::Expr::Multiply(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("pi".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("pi".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3 + e"),
             ast::Expr::Add(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                Box::new(ast::Expr::Number("e".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                Box::new(ast::Expr::Number("e".to_string(), ValueUnit::empty()))
             )
         );
 
         assert_eq!(
             run("3 - sin3"),
             ast::Expr::Subtract(
-                Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::FunctionCall(
                     "sin".to_string(),
-                    vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
                 ))
             )
         );
@@ -569,10 +569,10 @@ mod tests {
         assert_eq!(
             run("pi sin 3"),
             ast::Expr::Multiply(
-                Box::new(ast::Expr::Number("pi".to_string(), Unit::empty())),
+                Box::new(ast::Expr::Number("pi".to_string(), ValueUnit::empty())),
                 Box::new(ast::Expr::FunctionCall(
                     "sin".to_string(),
-                    vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
                 ))
             )
         );
@@ -582,8 +582,8 @@ mod tests {
             ast::Expr::FunctionCall(
                 "sin".to_string(),
                 vec![ast::Expr::Power(
-                    Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
                 )]
             )
         );
@@ -593,10 +593,10 @@ mod tests {
             ast::Expr::FunctionCall(
                 "sin".to_string(),
                 vec![ast::Expr::Power(
-                    Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                    Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                     Box::new(ast::Expr::Power(
-                        Box::new(ast::Expr::Number("2".to_string(), Unit::empty())),
-                        Box::new(ast::Expr::Number("3".to_string(), Unit::empty()))
+                        Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty())),
+                        Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty()))
                     ))
                 )]
             )
@@ -607,9 +607,9 @@ mod tests {
             ast::Expr::Add(
                 Box::new(ast::Expr::FunctionCall(
                     "sin".to_string(),
-                    vec![ast::Expr::Number("3".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("3".to_string(), ValueUnit::empty())]
                 )),
-                Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
             )
         );
 
@@ -617,7 +617,7 @@ mod tests {
             run("log2 256"), // Test function name with number
             ast::Expr::FunctionCall(
                 "log2".to_string(),
-                vec![ast::Expr::Number("256".to_string(), Unit::empty())]
+                vec![ast::Expr::Number("256".to_string(), ValueUnit::empty())]
             )
         );
 
@@ -626,9 +626,9 @@ mod tests {
             ast::Expr::Add(
                 Box::new(ast::Expr::FunctionCall(
                     "log".to_string(),
-                    vec![ast::Expr::Number("2".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("2".to_string(), ValueUnit::empty())]
                 )),
-                Box::new(ast::Expr::Number("256".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("256".to_string(), ValueUnit::empty()))
             )
         );
     }
@@ -640,12 +640,12 @@ mod tests {
             ast::Expr::Add(
                 Box::new(ast::Expr::Subtract(
                     Box::new(ast::Expr::Power(
-                        Box::new(ast::Expr::Number("e".to_string(), Unit::empty())),
-                        Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                        Box::new(ast::Expr::Number("e".to_string(), ValueUnit::empty())),
+                        Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
                     )),
                     Box::new(ast::Expr::Multiply(
-                        Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                        Box::new(ast::Expr::Number("pi".to_string(), Unit::empty()))
+                        Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                        Box::new(ast::Expr::Number("pi".to_string(), ValueUnit::empty()))
                     ))
                 )),
                 Box::new(ast::Expr::Percent("10".to_string()))
@@ -656,22 +656,22 @@ mod tests {
             run("2(3 + sin pi - 4^2) / e"),
             ast::Expr::Divide(
                 Box::new(ast::Expr::Multiply(
-                    Box::new(ast::Expr::Number("2".to_string(), Unit::empty())),
+                    Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty())),
                     Box::new(ast::Expr::Subtract(
                         Box::new(ast::Expr::Add(
-                            Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+                            Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
                             Box::new(ast::Expr::FunctionCall(
                                 "sin".to_string(),
-                                vec![ast::Expr::Number("pi".to_string(), Unit::empty())]
+                                vec![ast::Expr::Number("pi".to_string(), ValueUnit::empty())]
                             ))
                         )),
                         Box::new(ast::Expr::Power(
-                            Box::new(ast::Expr::Number("4".to_string(), Unit::empty())),
-                            Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                            Box::new(ast::Expr::Number("4".to_string(), ValueUnit::empty())),
+                            Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
                         ))
                     ))
                 )),
-                Box::new(ast::Expr::Number("e".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("e".to_string(), ValueUnit::empty()))
             )
         );
 
@@ -684,16 +684,16 @@ mod tests {
                         "cos".to_string(),
                         vec![ast::Expr::FunctionCall(
                             "tan".to_string(),
-                            vec![ast::Expr::Number("45".to_string(), Unit::empty())]
+                            vec![ast::Expr::Number("45".to_string(), ValueUnit::empty())]
                         )]
                     )]
                 )),
                 Box::new(ast::Expr::Multiply(
                     Box::new(ast::Expr::Multiply(
-                        Box::new(ast::Expr::Number("pi".to_string(), Unit::empty())),
-                        Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                        Box::new(ast::Expr::Number("pi".to_string(), ValueUnit::empty())),
+                        Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
                     )),
-                    Box::new(ast::Expr::Number("e".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("e".to_string(), ValueUnit::empty()))
                 ))
             )
         );
@@ -702,12 +702,12 @@ mod tests {
             run("2 * pi sin(30)"),
             ast::Expr::Multiply(
                 Box::new(ast::Expr::Multiply(
-                    Box::new(ast::Expr::Number("2".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("pi".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("pi".to_string(), ValueUnit::empty()))
                 )),
                 Box::new(ast::Expr::FunctionCall(
                     "sin".to_string(),
-                    vec![ast::Expr::Number("30".to_string(), Unit::empty())]
+                    vec![ast::Expr::Number("30".to_string(), ValueUnit::empty())]
                 ))
             )
         );
@@ -716,18 +716,18 @@ mod tests {
             run("pi e + 2pi * 3e"),
             ast::Expr::Add(
                 Box::new(ast::Expr::Multiply(
-                    Box::new(ast::Expr::Number("pi".to_string(), Unit::empty())),
-                    Box::new(ast::Expr::Number("e".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("pi".to_string(), ValueUnit::empty())),
+                    Box::new(ast::Expr::Number("e".to_string(), ValueUnit::empty()))
                 )),
                 Box::new(ast::Expr::Multiply(
                     Box::new(ast::Expr::Multiply(
                         Box::new(ast::Expr::Multiply(
-                            Box::new(ast::Expr::Number("2".to_string(), Unit::empty())),
-                            Box::new(ast::Expr::Number("pi".to_string(), Unit::empty()))
+                            Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty())),
+                            Box::new(ast::Expr::Number("pi".to_string(), ValueUnit::empty()))
                         )),
-                        Box::new(ast::Expr::Number("3".to_string(), Unit::empty()))
+                        Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty()))
                     )),
-                    Box::new(ast::Expr::Number("e".to_string(), Unit::empty()))
+                    Box::new(ast::Expr::Number("e".to_string(), ValueUnit::empty()))
                 ))
             )
         );
@@ -736,7 +736,7 @@ mod tests {
             run("pi% * e"),
             ast::Expr::Multiply(
                 Box::new(ast::Expr::Percent("pi".to_string())),
-                Box::new(ast::Expr::Number("e".to_string(), Unit::empty()))
+                Box::new(ast::Expr::Number("e".to_string(), ValueUnit::empty()))
             )
         );
 
@@ -746,15 +746,15 @@ mod tests {
                 "sin".to_string(),
                 vec![ast::Expr::Divide(
                     Box::new(ast::Expr::Add(
-                        Box::new(ast::Expr::Number("45".to_string(), Unit::empty())),
+                        Box::new(ast::Expr::Number("45".to_string(), ValueUnit::empty())),
                         Box::new(ast::Expr::Multiply(
-                            Box::new(ast::Expr::Number("30".to_string(), Unit::empty())),
-                            Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                            Box::new(ast::Expr::Number("30".to_string(), ValueUnit::empty())),
+                            Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
                         ))
                     )),
                     Box::new(ast::Expr::Power(
-                        Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
-                        Box::new(ast::Expr::Number("2".to_string(), Unit::empty()))
+                        Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
+                        Box::new(ast::Expr::Number("2".to_string(), ValueUnit::empty()))
                     ))
                 )]
             )
@@ -766,7 +766,7 @@ mod tests {
     //     assert_eq!(
     //         run("3m"),
     //         ast::Expr::Unit(
-    //             Box::new(ast::Expr::Number("3".to_string(), Unit::empty())),
+    //             Box::new(ast::Expr::Number("3".to_string(), ValueUnit::empty())),
     //             "m".to_string()
     //         )
     //     );

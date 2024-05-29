@@ -1,9 +1,9 @@
-use crate::unit::Unit;
+use crate::value_unit::ValueUnit;
 
 #[derive(Debug, PartialEq)]
 pub enum Expr {
-    Number(String, Unit),
-    WithUnit(Box<Expr>, Unit),
+    Number(String, ValueUnit),
+    WithUnit(Box<Expr>, ValueUnit),
     Percent(String),
     Add(Box<Expr>, Box<Expr>),
     Subtract(Box<Expr>, Box<Expr>),
@@ -24,7 +24,7 @@ pub enum Expr {
     FunctionCall(String, Vec<Expr>),
 }
 
-fn sum_units(unit1: Unit, unit2: Unit) -> Unit {
+fn sum_units(unit1: ValueUnit, unit2: ValueUnit) -> ValueUnit {
     if unit1 == unit2 {
         unit1
     } else if unit1.blank() {
@@ -36,16 +36,16 @@ fn sum_units(unit1: Unit, unit2: Unit) -> Unit {
     }
 }
 
-fn multiply_units(unit1: Unit, unit2: Unit) -> Unit {
+fn multiply_units(unit1: ValueUnit, unit2: ValueUnit) -> ValueUnit {
     unit1.multiply(&unit2)
 }
 
-fn divide_units(unit1: Unit, unit2: Unit) -> Unit {
+fn divide_units(unit1: ValueUnit, unit2: ValueUnit) -> ValueUnit {
     unit1.divide(&unit2)
 }
 
 impl Expr {
-    pub fn eval(&self) -> (f64, Unit) {
+    pub fn eval(&self) -> (f64, ValueUnit) {
         match self {
             Expr::Number(n, unit) => (Self::parse_number(n.clone()), unit.clone()),
             Expr::WithUnit(e, unit) => {
@@ -55,7 +55,7 @@ impl Expr {
                 }
                 (_e, unit.clone())
             }
-            Expr::Percent(p) => (Self::parse_number(p.clone()) / 100.0, Unit::empty()),
+            Expr::Percent(p) => (Self::parse_number(p.clone()) / 100.0, ValueUnit::empty()),
             Expr::Add(v1, v2) => {
                 if let Expr::Percent(n) = v2.as_ref() {
                     let (_v1, unit) = v1.eval();
@@ -256,8 +256,8 @@ impl Expr {
                     (_v.ceil(), unit)
                 }
                 "cos" => {
-                    let (_v, unit) = args[0].eval();
-                    (_v.cos(), unit)
+                    let (_v, _) = args[0].eval();
+                    (_v.cos(), ValueUnit::empty())
                 }
                 "cosh" => {
                     let (_v, unit) = args[0].eval();
@@ -285,15 +285,16 @@ impl Expr {
                 }
                 "rand" => {
                     let v = rand::random::<f64>();
-                    (v, Unit::empty())
+                    (v, ValueUnit::empty())
                 }
                 "round" => {
                     let (_v, unit) = args[0].eval();
                     (_v.round(), unit)
                 }
                 "sin" => {
-                    let (_v, unit) = args[0].eval();
-                    (_v.sin(), unit)
+                    let (_v, _) = args[0].eval();
+                    let sin_val = _v % (2.0 * std::f64::consts::PI);
+                    (sin_val.sin(), ValueUnit::empty())
                 }
                 "sinh" => {
                     let (_v, unit) = args[0].eval();
@@ -304,8 +305,8 @@ impl Expr {
                     (_v.sqrt(), unit)
                 }
                 "tan" => {
-                    let (_v, unit) = args[0].eval();
-                    (_v.tan(), unit)
+                    let (_v, _) = args[0].eval();
+                    (_v.tan(), ValueUnit::empty())
                 }
                 "tanh" => {
                     let (_v, unit) = args[0].eval();
@@ -373,13 +374,13 @@ mod tests {
 
     #[test]
     fn test_eval() {
-        assert_eq!(crate::parse("1+2").unwrap().eval(), (3.0, Unit::empty()));
+        assert_eq!(crate::parse("1+2").unwrap().eval(), (3.0, ValueUnit::empty()));
 
-        assert_eq!(crate::parse("123").unwrap().eval(), (123.0, Unit::empty()));
+        assert_eq!(crate::parse("123").unwrap().eval(), (123.0, ValueUnit::empty()));
 
         assert_eq!(
             crate::parse("123.456").unwrap().eval(),
-            (123.456, Unit::empty())
+            (123.456, ValueUnit::empty())
         );
 
         // assert_eq!(
@@ -389,30 +390,30 @@ mod tests {
 
         assert_eq!(
             crate::parse("+123").unwrap().eval(),
-            (123.0, Unit::empty())
+            (123.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("-123").unwrap().eval(),
-            (-123.0, Unit::empty())
+            (-123.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("~123").unwrap().eval(),
-            (((!(123 as u64)) as f64), Unit::empty())
+            (((!(123 as u64)) as f64), ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("1 - -2").unwrap().eval(),
-            (3.0, Unit::empty())
+            (3.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3 - ~4").unwrap().eval(),
-            (3.0 - (!(4 as u64)) as f64, Unit::empty())
+            (3.0 - (!(4 as u64)) as f64, ValueUnit::empty())
         );
 
-        assert_eq!(crate::parse("123%").unwrap().eval(), (1.23, Unit::empty()));
+        assert_eq!(crate::parse("123%").unwrap().eval(), (1.23, ValueUnit::empty()));
 
         // assert_eq!(
         //     crate::parse("1,23.456%").unwrap().eval(),
@@ -421,103 +422,103 @@ mod tests {
 
         assert_eq!(
             crate::parse("123 % 4").unwrap().eval(),
-            (3.0, Unit::empty())
+            (3.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("(123%)").unwrap().eval(),
-            (1.23, Unit::empty())
+            (1.23, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("123%pi").unwrap().eval(),
-            (1.23 * std::f64::consts::PI, Unit::empty())
+            (1.23 * std::f64::consts::PI, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("1 + 123% of (3 + 4)").unwrap().eval(),
-            (9.61, Unit::empty())
+            (9.61, ValueUnit::empty())
         );
 
-        assert_eq!(crate::parse("5!").unwrap().eval(), (120.0, Unit::empty()));
+        assert_eq!(crate::parse("5!").unwrap().eval(), (120.0, ValueUnit::empty()));
 
         assert_eq!(
             crate::parse("5!*3").unwrap().eval(),
-            (360.0, Unit::empty())
+            (360.0, ValueUnit::empty())
         );
 
-        assert_eq!(crate::parse("1 + 2").unwrap().eval(), (3.0, Unit::empty()));
+        assert_eq!(crate::parse("1 + 2").unwrap().eval(), (3.0, ValueUnit::empty()));
 
         assert_eq!(
             crate::parse("1 - 2").unwrap().eval(),
-            (-1.0, Unit::empty())
+            (-1.0, ValueUnit::empty())
         );
 
-        assert_eq!(crate::parse("3 * 2").unwrap().eval(), (6.0, Unit::empty()));
+        assert_eq!(crate::parse("3 * 2").unwrap().eval(), (6.0, ValueUnit::empty()));
 
-        assert_eq!(crate::parse("6 / 4").unwrap().eval(), (1.5, Unit::empty()));
+        assert_eq!(crate::parse("6 / 4").unwrap().eval(), (1.5, ValueUnit::empty()));
 
-        assert_eq!(crate::parse("3 ^ 2").unwrap().eval(), (9.0, Unit::empty()));
+        assert_eq!(crate::parse("3 ^ 2").unwrap().eval(), (9.0, ValueUnit::empty()));
 
-        assert_eq!(crate::parse("9 % 2").unwrap().eval(), (1.0, Unit::empty()));
+        assert_eq!(crate::parse("9 % 2").unwrap().eval(), (1.0, ValueUnit::empty()));
 
         assert_eq!(
             crate::parse("1 + 2 + 3").unwrap().eval(),
-            (6.0, Unit::empty())
+            (6.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("1 + 2 * 3").unwrap().eval(),
-            (7.0, Unit::empty())
+            (7.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3 ** 2").unwrap().eval(),
-            (9.0, Unit::empty())
+            (9.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("4 ^ 2 ^ 3").unwrap().eval(),
-            (65536.0, Unit::empty())
+            (65536.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("-3 + 4").unwrap().eval(),
-            (1.0, Unit::empty())
+            (1.0, ValueUnit::empty())
         );
 
-        assert_eq!(crate::parse("3 & 4").unwrap().eval(), (0.0, Unit::empty()));
+        assert_eq!(crate::parse("3 & 4").unwrap().eval(), (0.0, ValueUnit::empty()));
 
-        assert_eq!(crate::parse("3 | 4").unwrap().eval(), (7.0, Unit::empty()));
+        assert_eq!(crate::parse("3 | 4").unwrap().eval(), (7.0, ValueUnit::empty()));
 
         assert_eq!(
             crate::parse("3 xor 4").unwrap().eval(),
-            (7.0, Unit::empty())
+            (7.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3 << 4").unwrap().eval(),
-            (48.0, Unit::empty())
+            (48.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3 >> 4").unwrap().eval(),
-            (0.0, Unit::empty())
+            (0.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3 rol 4").unwrap().eval(),
-            (48.0, Unit::empty())
+            (48.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3 ror 4").unwrap().eval(),
-            (0x3000000000000000i64 as f64, Unit::empty())
+            (0x3000000000000000i64 as f64, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3 mod 5").unwrap().eval(),
-            (3.0, Unit::empty())
+            (3.0, ValueUnit::empty())
         );
 
         assert_eq!(
@@ -525,199 +526,199 @@ mod tests {
             crate::parse("1 & 2 | 3 xor 4 << 5 >> 6 rol 7 ror 8")
                 .unwrap()
                 .eval(),
-            (2.0, Unit::empty())
+            (2.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("(1 + 2) * 3").unwrap().eval(),
-            (9.0, Unit::empty())
+            (9.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("1 + (2 * 3)").unwrap().eval(),
-            (7.0, Unit::empty())
+            (7.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3%(3 + 4)").unwrap().eval(), // modulo
-            (3.0, Unit::empty())
+            (3.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3(5 + 4)").unwrap().eval(),
-            (27.0, Unit::empty())
+            (27.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("(3 + 2   )").unwrap().eval(),
-            (5.0, Unit::empty())
+            (5.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("-(3 + 2)").unwrap().eval(),
-            (-5.0, Unit::empty())
+            (-5.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("pi").unwrap().eval(),
-            (std::f64::consts::PI, Unit::empty())
+            (std::f64::consts::PI, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("e").unwrap().eval(),
-            (std::f64::consts::E, Unit::empty())
+            (std::f64::consts::E, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("sin(3)").unwrap().eval(),
-            (0.1411200080598672, Unit::empty())
+            (0.1411200080598672, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("cos(3)").unwrap().eval(),
-            (-0.9899924966004454, Unit::empty())
+            (-0.9899924966004454, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("tan3").unwrap().eval(),
-            (-0.1425465430742778, Unit::empty())
+            (-0.1425465430742778, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("tan 3").unwrap().eval(),
-            (-0.1425465430742778, Unit::empty())
+            (-0.1425465430742778, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("log(3)").unwrap().eval(),
-            (0.47712125471966244, Unit::empty())
+            (0.47712125471966244, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("ln(3)").unwrap().eval(),
-            (1.0986122886681098, Unit::empty())
+            (1.0986122886681098, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("sin(cos(pi))").unwrap().eval(),
-            (-0.8414709848078965, Unit::empty())
+            (-0.8414709848078965, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("sin cos pi").unwrap().eval(),
-            (-0.8414709848078965, Unit::empty())
+            (-0.8414709848078965, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3pi").unwrap().eval(),
-            (3.0 * std::f64::consts::PI, Unit::empty())
+            (3.0 * std::f64::consts::PI, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3e").unwrap().eval(),
-            (3.0 * std::f64::consts::E, Unit::empty())
+            (3.0 * std::f64::consts::E, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3sin(3)").unwrap().eval(),
-            (3.0 * 0.1411200080598672, Unit::empty())
+            (3.0 * 0.1411200080598672, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3cos(3)").unwrap().eval(),
-            (3.0 * -0.9899924966004454, Unit::empty())
+            (3.0 * -0.9899924966004454, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3tan3").unwrap().eval(),
-            (3.0 * -0.1425465430742778, Unit::empty())
+            (3.0 * -0.1425465430742778, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3tan 3").unwrap().eval(),
-            (3.0 * -0.1425465430742778, Unit::empty())
+            (3.0 * -0.1425465430742778, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3 * pi").unwrap().eval(),
-            (3.0 * std::f64::consts::PI, Unit::empty())
+            (3.0 * std::f64::consts::PI, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3 + e").unwrap().eval(),
-            (3.0 + std::f64::consts::E, Unit::empty())
+            (3.0 + std::f64::consts::E, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("3 - sin3").unwrap().eval(),
-            (3.0 - 0.1411200080598672, Unit::empty())
+            (3.0 - 0.1411200080598672, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("pi sin 3").unwrap().eval(),
-            (std::f64::consts::PI * 0.1411200080598672, Unit::empty())
+            (std::f64::consts::PI * 0.1411200080598672, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("sin 3^2").unwrap().eval(),
-            (9.0f64.sin(), Unit::empty())
+            (9.0f64.sin(), ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("sin 3^2^3").unwrap().eval(),
-            (6561.0f64.sin(), Unit::empty())
+            (6561.0f64.sin(), ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("sin 3+2").unwrap().eval(),
-            (2.1411200080598672, Unit::empty())
+            (2.1411200080598672, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("log2 256").unwrap().eval(),
-            (8.0, Unit::empty())
+            (8.0, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("log 2 + 256").unwrap().eval(),
-            (256.3010299956639812, Unit::empty())
+            (256.3010299956639812, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("e ^ 2 - 3 * pi + 10%").unwrap().eval(),
-            (-2.239294048022603, Unit::empty())
+            (-2.239294048022603, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("2(3 + sin pi - 4^2) / e").unwrap().eval(),
-            (-9.564865470457502, Unit::empty())
+            (-9.564865470457502, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("sin(cos(tan 45)) + pi * 2e").unwrap().eval(),
-            (17.030528719035757, Unit::empty())
+            (17.030528719035757, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("2 * pi sin(30)").unwrap().eval(),
-            (-6.207985783529054, Unit::empty())
+            (-6.207985783529054, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("pi e + 2pi * 3e").unwrap().eval(),
-            (59.77813955871496, Unit::empty())
+            (59.77813955871496, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("pi% * e").unwrap().eval(),
-            (0.08539734222673567, Unit::empty())
+            (0.08539734222673567, ValueUnit::empty())
         );
 
         assert_eq!(
             crate::parse("sin((45 + (30 * 2)) / (3 ^ 2))")
                 .unwrap()
                 .eval(),
-            (-0.78314284623659, Unit::empty())
+            (-0.78314284623659, ValueUnit::empty())
         );
 
         // assert_eq!(

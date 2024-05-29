@@ -2,24 +2,24 @@
 /// For example, the unit "m/s^2" would be represented as
 /// [("m", 1), ("s", -2)].
 #[derive(Clone, Debug)]
-pub struct Unit {
+pub struct ValueUnit {
     pub parts: Vec<(String, isize)>,
 }
 
-impl Unit {
+impl ValueUnit {
     /// Create a new unit from a list of factors and exponents.
-    fn new(parts: Vec<(String, isize)>) -> Unit {
-        Unit { parts }
+    fn new(parts: Vec<(String, isize)>) -> ValueUnit {
+        ValueUnit { parts }
     }
 
-    pub fn empty() -> Unit {
-        Unit { parts: vec![] }
+    pub fn empty() -> ValueUnit {
+        ValueUnit { parts: vec![] }
     }
 
-    pub fn from_str(s: &str) -> Unit {
+    pub fn from_str(s: &str) -> ValueUnit {
         let parts = crate::parser::units::ExprParser::new().parse(s).unwrap().flatten();
 
-        Unit::new(parts).normalize()
+        ValueUnit::new(parts).normalize()
     }
 
     pub fn blank(&self) -> bool {
@@ -27,35 +27,35 @@ impl Unit {
     }
 
     /// Multiply two units together.
-    pub fn multiply(&self, other: &Unit) -> Unit {
+    pub fn multiply(&self, other: &ValueUnit) -> ValueUnit {
         let mut parts = self.parts.clone();
         for (factor, exponent) in &other.parts {
             parts.push((factor.clone(), *exponent));
         }
-        Unit::new(parts).normalize()
+        ValueUnit::new(parts).normalize()
     }
 
     /// Divide two units.
-    pub fn divide(&self, other: &Unit) -> Unit {
+    pub fn divide(&self, other: &ValueUnit) -> ValueUnit {
         let mut parts = self.parts.clone();
         for (factor, exponent) in &other.parts {
             parts.push((factor.clone(), -*exponent));
         }
-        Unit::new(parts).normalize()
+        ValueUnit::new(parts).normalize()
     }
 
     /// Raise a unit to a power.
-    pub fn pow(&self, power: i32) -> Unit {
+    pub fn pow(&self, power: i32) -> ValueUnit {
         let parts = self
             .parts
             .iter()
             .map(|(factor, exponent)| (factor.clone(), (*exponent as i32 * power) as isize))
             .collect();
-        Unit::new(parts).normalize()
+        ValueUnit::new(parts).normalize()
     }
 
     /// Clean up a unit by combining like terms.
-    fn normalize(&self) -> Unit {
+    fn normalize(&self) -> ValueUnit {
         if self.parts.is_empty() {
             return self.clone();
         }
@@ -75,7 +75,7 @@ impl Unit {
         // Filter out any terms with a zero exponent.
         parts.retain(|(_, exponent)| *exponent != 0);
 
-        Unit { parts }
+        ValueUnit { parts }
     }
 
     /// Convert a unit to a string.
@@ -121,14 +121,14 @@ impl Unit {
     }
 }
 
-impl PartialEq for Unit {
+impl PartialEq for ValueUnit {
     /// Equality is determined by the normalized form of the unit.
     fn eq(&self, other: &Self) -> bool {
         self.normalize().parts == other.normalize().parts
     }
 }
 
-impl std::fmt::Display for Unit {
+impl std::fmt::Display for ValueUnit {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_string())
     }
@@ -140,13 +140,13 @@ mod tests {
 
     #[test]
     fn test_unit_multiply() {
-        let unit1 = Unit::new(vec![("m".to_string(), 1), ("s".to_string(), -2)]);
-        let unit2 = Unit::new(vec![("s".to_string(), 1), ("kg".to_string(), 1)]);
+        let unit1 = ValueUnit::new(vec![("m".to_string(), 1), ("s".to_string(), -2)]);
+        let unit2 = ValueUnit::new(vec![("s".to_string(), 1), ("kg".to_string(), 1)]);
         let result = unit1.multiply(&unit2);
 
         assert_eq!(
             result,
-            Unit::new(vec![
+            ValueUnit::new(vec![
                 ("m".to_string(), 1),
                 ("s".to_string(), -1),
                 ("kg".to_string(), 1),
@@ -156,13 +156,13 @@ mod tests {
 
     #[test]
     fn test_unit_divide() {
-        let unit1 = Unit::new(vec![("m".to_string(), 1), ("s".to_string(), -2)]);
-        let unit2 = Unit::new(vec![("s".to_string(), 1), ("kg".to_string(), 1)]);
+        let unit1 = ValueUnit::new(vec![("m".to_string(), 1), ("s".to_string(), -2)]);
+        let unit2 = ValueUnit::new(vec![("s".to_string(), 1), ("kg".to_string(), 1)]);
         let result = unit1.divide(&unit2);
 
         assert_eq!(
             result,
-            Unit::new(vec![
+            ValueUnit::new(vec![
                 ("m".to_string(), 1),
                 ("s".to_string(), -3),
                 ("kg".to_string(), -1),
@@ -172,12 +172,12 @@ mod tests {
 
     #[test]
     fn test_unit_pow() {
-        let unit = Unit::new(vec![("m".to_string(), 1), ("s".to_string(), -2)]);
+        let unit = ValueUnit::new(vec![("m".to_string(), 1), ("s".to_string(), -2)]);
         let result = unit.pow(3);
 
         assert_eq!(
             result,
-            Unit::new(vec![("m".to_string(), 3), ("s".to_string(), -6),])
+            ValueUnit::new(vec![("m".to_string(), 3), ("s".to_string(), -6),])
         );
     }
 }
